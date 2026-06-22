@@ -43,7 +43,7 @@ def test_flags_and_dtypes():
     assert _col(d, "sample_id").example_values == sorted(["S1", "S2", "S3"])
 
 
-def test_barcode_empty_at_this_stage():
+def test_barcode_detected_prefix_on_obs_fixture():
     d = profile_obs(_obs())
     assert d.barcode is not None
     assert d.barcode.position == "prefix"
