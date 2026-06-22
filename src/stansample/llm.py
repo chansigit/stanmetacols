@@ -19,7 +19,7 @@ def _valid_labels(digest: ObsDigest) -> dict:
 
 
 def rank_with_llm(digest: ObsDigest, *, model: str = "claude-opus-4-8",
-                  client=None, max_tokens: int = 2048) -> list:
+                  client=None, max_tokens: int = 2048) -> list[Candidate]:
     if client is None:
         try:
             import anthropic

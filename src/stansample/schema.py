@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel
 
@@ -58,7 +58,7 @@ class ObsDigest:
     n_obs: int
     columns: list                 # list[ColumnProfile]
     composite_candidates: list    # list[CompositeProfile]
-    barcode: Optional[BarcodeProfile] = None
+    barcode: BarcodeProfile | None = None
 
     def to_prompt_dict(self) -> dict:
         return {
@@ -95,7 +95,7 @@ class RankResult:
     method: str
     digest: ObsDigest
 
-    def top(self) -> Optional[Candidate]:
+    def top(self) -> Candidate | None:
         return self.candidates[0] if self.candidates else None
 
 

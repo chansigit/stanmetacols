@@ -67,3 +67,23 @@ def test_input_not_mutated():
     before = obs.copy()
     rank_sample_columns(obs, use_llm=False)
     pd.testing.assert_frame_equal(obs, before)
+
+
+def test_dataframe_with_obs_column_does_not_crash():
+    # A bare DataFrame with a column literally named "obs" must not be mistaken
+    # for an AnnData; it should rank normally via the heuristic path.
+    df = pd.DataFrame(
+        {"obs": ["S1"] * 3 + ["S2"] * 3, "x": list(range(6))},
+        index=[f"c{i}" for i in range(6)])
+    res = rank_sample_columns(df, use_llm=False)
+    assert res.method == "heuristic"
+
+
+def test_top_k_none_and_negative_return_all():
+    df = pd.DataFrame(
+        {"sample_id": ["S1"] * 3 + ["S2"] * 3, "tissue": ["lung"] * 6},
+        index=[f"c{i}" for i in range(6)])
+    n_all = len(rank_sample_columns(df, use_llm=False, top_k=0).candidates)
+    assert n_all >= 1
+    assert len(rank_sample_columns(df, use_llm=False, top_k=None).candidates) == n_all
+    assert len(rank_sample_columns(df, use_llm=False, top_k=-1).candidates) == n_all

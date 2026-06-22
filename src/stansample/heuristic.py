@@ -41,7 +41,7 @@ def _score(name, n_unique, balance, dtype, n_missing, n_obs, looks_like_barcode)
     return max(0.0, min(1.0, raw)), name_sig, card
 
 
-def rank_heuristic(digest: ObsDigest) -> list:
+def rank_heuristic(digest: ObsDigest) -> list[Candidate]:
     out = []
     n_obs = digest.n_obs
     for c in digest.columns:
