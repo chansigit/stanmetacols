@@ -66,7 +66,7 @@ def _parse_ranked(text: str | None) -> RankedCandidates:
         raise LLMUnavailable(f"response does not match schema: {exc}") from exc
 
 
-def _call_anthropic(digest: ObsDigest, model: str, client, max_tokens: int) -> RankedCandidates:
+def _call_anthropic(digest: ObsDigest, roles, model: str, client, max_tokens: int) -> RankedCandidates:
     if client is None:
         try:
             import anthropic
@@ -82,7 +82,7 @@ def _call_anthropic(digest: ObsDigest, model: str, client, max_tokens: int) -> R
             model=model,
             max_tokens=max_tokens,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": build_user_prompt(digest)}],
+            messages=[{"role": "user", "content": build_user_prompt(digest, roles)}],
             output_format=RankedCandidates,
         )
     except Exception as exc:  # any API/connection/parse error -> fallback
@@ -94,7 +94,7 @@ def _call_anthropic(digest: ObsDigest, model: str, client, max_tokens: int) -> R
     return parsed
 
 
-def _call_openai(digest: ObsDigest, model: str, client, base_url, api_key,
+def _call_openai(digest: ObsDigest, roles, model: str, client, base_url, api_key,
                  max_tokens: int) -> RankedCandidates:
     if client is None:
         try:
@@ -118,7 +118,7 @@ def _call_openai(digest: ObsDigest, model: str, client, base_url, api_key,
             max_tokens=max_tokens,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": build_user_prompt(digest)},
+                {"role": "user", "content": build_user_prompt(digest, roles)},
             ],
         )
     except Exception as exc:  # any API/connection error -> fallback
@@ -131,25 +131,29 @@ def _call_openai(digest: ObsDigest, model: str, client, base_url, api_key,
     return _parse_ranked(text)
 
 
-def rank_with_llm(digest: ObsDigest, *, provider: str = "anthropic",
+def rank_with_llm(digest: ObsDigest, roles, *, provider: str = "anthropic",
                   model: str = "claude-opus-4-8", client=None,
                   base_url: str | None = None, api_key: str | None = None,
-                  max_tokens: int = 2048) -> list[Candidate]:
+                  max_tokens: int = 2048) -> dict:
     if provider == "anthropic":
-        parsed = _call_anthropic(digest, model, client, max_tokens)
+        parsed = _call_anthropic(digest, roles, model, client, max_tokens)
     elif provider == "openai":
-        parsed = _call_openai(digest, model, client, base_url, api_key, max_tokens)
+        parsed = _call_openai(digest, roles, model, client, base_url, api_key, max_tokens)
     else:
         raise LLMUnavailable(f"unknown provider: {provider!r}")
 
     labels = _valid_labels(digest)
-    out = []
+    requested = set(roles)
+    out = {k: [] for k in roles}
     for rc in parsed.candidates:
+        if rc.role not in requested:
+            continue
         kind = labels.get(rc.column)
-        if kind is None:           # hallucinated / unknown column -> drop
+        if kind is None:                  # hallucinated column -> drop
             continue
         score = max(0.0, min(1.0, float(rc.score)))
-        out.append(Candidate(role=rc.role, column=rc.column, kind=kind,
-                             score=score, reason=rc.reason, source="llm"))
-    out.sort(key=lambda c: c.score, reverse=True)
+        out[rc.role].append(Candidate(role=rc.role, column=rc.column, kind=kind,
+                                      score=score, reason=rc.reason, source="llm"))
+    for k in out:
+        out[k].sort(key=lambda c: c.score, reverse=True)
     return out

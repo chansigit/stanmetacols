@@ -1,45 +1,45 @@
-"""Public orchestrator: build digest, rank via LLM (with heuristic fallback)."""
+"""Public orchestrator: build digest, rank per role (LLM stage 1 + heuristic
+fallback). Numeric adjudication (stage 2) is wired in Task 6."""
 
 from __future__ import annotations
 
-from .schema import RankResult, LLMUnavailable
+from .schema import MetaColsResult, LLMUnavailable
 from .profile import profile_obs
+from .roles import ROLE_KEYS
 from .llm import rank_with_llm
 from .heuristic import rank_heuristic
 
 
 def _extract(data):
-    """Return (obs_dataframe, obs_names) for an AnnData or a bare DataFrame.
-
-    AnnData exposes `.obs_names`; a bare DataFrame does not (and a DataFrame may
-    even have a column literally named "obs"), so detect AnnData via obs_names —
-    not via getattr(data, "obs").
-    """
     if hasattr(data, "obs_names") and hasattr(data, "obs"):
         return data.obs, list(data.obs_names)
     return data, list(data.index)
 
 
-def rank_sample_columns(data, *, use_llm: bool = True, provider: str = "anthropic",
-                        model: str = "claude-opus-4-8", client=None,
-                        base_url: str | None = None, api_key: str | None = None,
-                        top_k: int | None = 5) -> RankResult:
+def rank_meta_columns(data, *, roles=None, use_llm: bool = True,
+                      adjudicate: bool = True, provider: str = "anthropic",
+                      model: str = "claude-opus-4-8", client=None,
+                      base_url: str | None = None, api_key: str | None = None,
+                      top_k: int | None = 5) -> MetaColsResult:
+    role_keys = list(roles) if roles else list(ROLE_KEYS)
     obs, obs_names = _extract(data)
     digest = profile_obs(obs, obs_names)
 
     if use_llm:
         try:
-            candidates = rank_with_llm(digest, provider=provider, model=model,
-                                       client=client, base_url=base_url, api_key=api_key)
+            ranked = rank_with_llm(digest, role_keys, provider=provider,
+                                   model=model, client=client,
+                                   base_url=base_url, api_key=api_key)
             method = f"llm ({provider})"
         except LLMUnavailable as exc:
-            candidates = rank_heuristic(digest)
+            ranked = rank_heuristic(digest, role_keys)
             method = f"heuristic (llm unavailable: {exc})"
     else:
-        candidates = rank_heuristic(digest)
+        ranked = rank_heuristic(digest, role_keys)
         method = "heuristic"
 
-    candidates = sorted(candidates, key=lambda c: c.score, reverse=True)
-    if top_k and top_k > 0:
-        candidates = candidates[:top_k]
-    return RankResult(candidates=candidates, method=method, digest=digest)
+    for k in ranked:
+        ranked[k] = sorted(ranked[k], key=lambda c: c.score, reverse=True)
+        if top_k and top_k > 0:
+            ranked[k] = ranked[k][:top_k]
+    return MetaColsResult(roles=ranked, method=method, digest=digest)

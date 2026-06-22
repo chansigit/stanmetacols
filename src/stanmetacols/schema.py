@@ -1,4 +1,4 @@
-"""Shared types: digest dataclasses, Candidate/RankResult, Pydantic output schema."""
+"""Shared types: digest dataclasses, Candidate/MetaColsResult, Pydantic output schema."""
 
 from __future__ import annotations
 
@@ -107,16 +107,6 @@ class MetaColsResult:
     def top(self, role: str):
         cands = self.roles.get(role) or []
         return cands[0] if cands else None
-
-
-@dataclass
-class RankResult:
-    candidates: list       # list[Candidate], sorted desc by score
-    method: str
-    digest: ObsDigest
-
-    def top(self) -> Candidate | None:
-        return self.candidates[0] if self.candidates else None
 
 
 class RankedCandidate(BaseModel):

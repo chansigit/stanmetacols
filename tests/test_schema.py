@@ -3,7 +3,7 @@ import pytest
 import pandas as pd
 import stanmetacols
 from stanmetacols.schema import (
-    Candidate, RankResult, ObsDigest, ColumnProfile, CompositeProfile,
+    Candidate, ObsDigest, ColumnProfile, CompositeProfile,
     BarcodeProfile, RankedCandidate, RankedCandidates, LLMUnavailable,
     MetaColsResult, Adjudications,
 )
@@ -16,14 +16,14 @@ def digest_fixture():
 
 
 def test_version():
-    assert stanmetacols.__version__ == "0.1.0"
+    assert stanmetacols.__version__ == "0.2.0"
 
 
-def test_candidate_and_result_top():
+def test_candidate_fields():
     digest = ObsDigest(n_obs=1, columns=[], composite_candidates=[], barcode=None)
     c = Candidate(role="sample", column="sample_id", kind="single", score=0.9, reason="r", source="heuristic")
-    assert RankResult(candidates=[c], method="heuristic", digest=digest).top() is c
-    assert RankResult(candidates=[], method="x", digest=digest).top() is None
+    assert c.role == "sample"
+    assert c.column == "sample_id"
 
 
 def test_labels():

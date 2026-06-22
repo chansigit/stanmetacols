@@ -1,40 +1,41 @@
-# tests/test_heuristic.py
-import numpy as np
 import pandas as pd
-
 from stanmetacols.profile import profile_obs
 from stanmetacols.heuristic import rank_heuristic
+from stanmetacols.roles import ROLE_KEYS
 
 
-def _obs():
-    n = 30
-    return pd.DataFrame(
-        {
-            "sample_id": ["S1"] * 10 + ["S2"] * 10 + ["S3"] * 10,
-            "donor": ["D1"] * 15 + ["D2"] * 15,
-            "timepoint": ["t0", "t1", "t2"] * 10,
-            "tissue": ["lung"] * 30,
-            "pct_mito": np.linspace(0.0, 10.0, n),
-            "cell_id": [f"cell{i}" for i in range(n)],
-        },
-        index=[f"S{(i // 10) + 1}_AAAC{i:04d}-1" for i in range(n)],
-    )
+def _digest():
+    n = 60
+    return profile_obs(pd.DataFrame({
+        "sample": ["S1"] * 30 + ["S2"] * 30,
+        "pct_counts_mt": [i / 100 for i in range(n)],          # [0,1) floats
+        "pct_counts_hb": [i / 1000 for i in range(n)],
+        "total_counts": [1000 + 10 * i for i in range(n)],     # large ints
+        "n_genes_by_counts": [200 + i for i in range(n)],      # mid ints
+        "doublet_score": [i / 100 for i in range(n)],
+    }, index=[f"c{i}" for i in range(n)]))
 
 
-def test_ranking_order_and_filtering():
-    res = rank_heuristic(profile_obs(_obs()))
-    cols = [c.column for c in res]
-    assert all(c.source == "heuristic" for c in res)
-    assert all(c.score > 0 for c in res)
-    # alias-named, well-grouped columns lead
-    assert cols[0] in ("sample_id", "donor")
-    assert cols.index("sample_id") < cols.index("timepoint")
-    # composite is offered
-    assert "donor + timepoint" in cols
-    # zero-score entries are dropped entirely
-    assert "tissue" not in cols      # single value
-    assert "cell_id" not in cols     # unique-per-cell
+def test_each_role_top_is_correct_column():
+    out = rank_heuristic(_digest(), list(ROLE_KEYS))
+    assert out["sample"][0].column == "sample"
+    assert out["pct_mt"][0].column == "pct_counts_mt"
+    assert out["pct_hb"][0].column == "pct_counts_hb"
+    assert out["n_counts"][0].column == "total_counts"
+    assert out["n_genes"][0].column == "n_genes_by_counts"
+    assert out["doublet_score"][0].column == "doublet_score"
 
 
-def test_empty_digest():
-    assert rank_heuristic(profile_obs(pd.DataFrame())) == []
+def test_numeric_role_requires_name_hit():
+    # a bare [0,1] float column with no pct/doublet name must NOT appear for pct_mt
+    d = profile_obs(pd.DataFrame({"score_x": [i / 100 for i in range(50)]},
+                                 index=[f"c{i}" for i in range(50)]))
+    assert rank_heuristic(d, ["pct_mt"])["pct_mt"] == []
+
+
+def test_value_guard_rejects_unit_column_for_counts():
+    # a [0,1] column literally named like counts should not win n_counts on value
+    d = profile_obs(pd.DataFrame({"pct_counts": [i / 100 for i in range(50)]},
+                                 index=[f"c{i}" for i in range(50)]))
+    cands = rank_heuristic(d, ["n_counts"])["n_counts"]
+    assert all(c.score < 0.7 for c in cands)    # name may hit, value does not

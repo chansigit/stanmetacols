@@ -1,17 +1,13 @@
-"""stanmetacols — rank which .obs column identifies the sample each cell came from."""
+"""stanmetacols — identify which .obs columns fill standard metadata roles."""
 
-from .schema import Candidate, RankResult, ObsDigest, LLMUnavailable
+from .schema import Candidate, MetaColsResult, ObsDigest, LLMUnavailable
 from .profile import profile_obs
-from .rank import rank_sample_columns
+from .roles import ROLES, ROLE_KEYS
+from .rank import rank_meta_columns
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
-    "rank_sample_columns",
-    "profile_obs",
-    "Candidate",
-    "RankResult",
-    "ObsDigest",
-    "LLMUnavailable",
-    "__version__",
+    "rank_meta_columns", "profile_obs", "Candidate", "MetaColsResult",
+    "ObsDigest", "ROLES", "ROLE_KEYS", "LLMUnavailable", "__version__",
 ]

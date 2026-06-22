@@ -39,11 +39,11 @@ def test_maps_and_filters_hallucinations():
         {"role": "sample", "column": "made_up_column", "kind": "single", "score": 0.8, "reason": "hallucinated"},
     ])
     client = _StubClient(parsed)
-    out = rank_with_llm(_digest(), client=client)
-    cols = [c.column for c in out]
+    out = rank_with_llm(_digest(), ["sample"], client=client)
+    cols = [c.column for c in out["sample"]]
     assert "sample_id" in cols
     assert "made_up_column" not in cols          # filtered: not in digest
-    assert all(c.source == "llm" for c in out)
+    assert all(c.source == "llm" for c in out["sample"])
     # prompt carried the digest
     assert "sample_id" in client.messages.kwargs["messages"][0]["content"]
     assert client.messages.kwargs["model"] == "claude-opus-4-8"
@@ -56,12 +56,12 @@ def test_api_error_becomes_llm_unavailable():
             def parse(**kwargs):
                 raise RuntimeError("network down")
     with pytest.raises(LLMUnavailable):
-        rank_with_llm(_digest(), client=_Boom())
+        rank_with_llm(_digest(), ["sample"], client=_Boom())
 
 
 def test_none_parsed_output_becomes_llm_unavailable():
     with pytest.raises(LLMUnavailable):
-        rank_with_llm(_digest(), client=_StubClient(None))
+        rank_with_llm(_digest(), ["sample"], client=_StubClient(None))
 
 
 # --- OpenAI-compatible backend (OpenAI, Volcengine ARK, DeepSeek, vLLM, …) ---
@@ -98,9 +98,9 @@ def test_openai_parses_json_and_filters_hallucinations():
         {"role": "sample", "column": "made_up", "kind": "single", "score": 0.8, "reason": "halluc"},
     ]})
     client = _StubOpenAIClient(content)
-    out = rank_with_llm(_digest(), provider="openai", client=client)
-    assert [c.column for c in out] == ["sample_id"]   # made_up dropped
-    assert all(c.source == "llm" for c in out)
+    out = rank_with_llm(_digest(), ["sample"], provider="openai", client=client)
+    assert [c.column for c in out["sample"]] == ["sample_id"]   # made_up dropped
+    assert all(c.source == "llm" for c in out["sample"])
     msgs = client.completions.kwargs["messages"]       # system + user, digest carried
     assert msgs[0]["role"] == "system"
     assert "sample_id" in msgs[1]["content"]
@@ -110,29 +110,29 @@ def test_openai_strips_markdown_code_fences():
     body = json.dumps({"candidates": [
         {"role": "sample", "column": "sample_id", "kind": "single", "score": 0.7, "reason": "x"}]})
     client = _StubOpenAIClient("```json\n" + body + "\n```")
-    out = rank_with_llm(_digest(), provider="openai", client=client)
-    assert [c.column for c in out] == ["sample_id"]
+    out = rank_with_llm(_digest(), ["sample"], provider="openai", client=client)
+    assert [c.column for c in out["sample"]] == ["sample_id"]
 
 
 def test_openai_accepts_bare_json_array():
     content = json.dumps([
         {"role": "sample", "column": "sample_id", "kind": "single", "score": 0.6, "reason": "x"}])
-    out = rank_with_llm(_digest(), provider="openai", client=_StubOpenAIClient(content))
-    assert [c.column for c in out] == ["sample_id"]
+    out = rank_with_llm(_digest(), ["sample"], provider="openai", client=_StubOpenAIClient(content))
+    assert [c.column for c in out["sample"]] == ["sample_id"]
 
 
 def test_openai_non_json_becomes_llm_unavailable():
     with pytest.raises(LLMUnavailable):
-        rank_with_llm(_digest(), provider="openai",
+        rank_with_llm(_digest(), ["sample"], provider="openai",
                       client=_StubOpenAIClient("I cannot help with that."))
 
 
 def test_openai_api_error_becomes_llm_unavailable():
     client = _StubOpenAIClient(raise_exc=RuntimeError("network down"))
     with pytest.raises(LLMUnavailable):
-        rank_with_llm(_digest(), provider="openai", client=client)
+        rank_with_llm(_digest(), ["sample"], provider="openai", client=client)
 
 
 def test_unknown_provider_becomes_llm_unavailable():
     with pytest.raises(LLMUnavailable):
-        rank_with_llm(_digest(), provider="cohere")
+        rank_with_llm(_digest(), ["sample"], provider="cohere")
