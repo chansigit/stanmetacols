@@ -172,3 +172,19 @@ def test_adjudication_failure_keeps_stage1():
                             client=_Stage2Boom(stage1))
     assert res.method == "llm (anthropic)"     # stage-1 kept, non-fatal
     assert res.top("n_counts").column == "total_counts"   # unchanged top
+
+
+def _organ_tissue_obs():
+    n = 30
+    return pd.DataFrame({
+        "organ": ["heart"] * 10 + ["liver"] * 10 + ["lung"] * 10,
+        "tissue": ["blood"] * 10 + ["PBMC"] * 10 + ["bone marrow"] * 10,
+    }, index=[f"c{i}" for i in range(n)])
+
+
+def test_default_run_surfaces_organ_and_tissue():
+    res = rank_meta_columns(_organ_tissue_obs(), use_llm=False)
+    assert res.method == "heuristic"
+    assert "organ" in res.roles and "tissue" in res.roles
+    assert res.top("organ").column == "organ"
+    assert res.top("tissue").column == "tissue"
