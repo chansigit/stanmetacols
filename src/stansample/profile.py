@@ -10,7 +10,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from .schema import ObsDigest, ColumnProfile, CompositeProfile
+from .schema import ObsDigest, ColumnProfile, CompositeProfile, BarcodeProfile
 
 _BARCODE_RE = re.compile(r"^[ACGTN]{8,}(-\d+)?$", re.IGNORECASE)
 
@@ -85,6 +85,33 @@ def _composite_candidates(obs, profiles, n_obs, max_pairs):
     return pairs[:max_pairs]
 
 
+def _barcode_profile(obs_names, n_obs, max_example_groups=8):
+    if n_obs == 0:
+        return None
+    s = pd.Series([str(x) for x in obs_names])
+    options = []
+    if s.str.contains("_", regex=False).mean() > 0.9:
+        options.append(("_", "prefix", s.str.rsplit("_", n=1).str[0]))
+    tail = s.str.rsplit("-", n=1).str[-1]
+    if tail.str.fullmatch(r"\d+").mean() > 0.9:
+        options.append(("-", "suffix", tail))
+    best = None
+    for delimiter, position, grp in options:
+        vc = grp.value_counts()
+        n_groups = int(vc.size)
+        if not (2 <= n_groups < n_obs):
+            continue
+        cells_per_group, balance = _group_stats(vc.to_numpy())
+        prof = BarcodeProfile(
+            delimiter=delimiter, position=position, n_groups=n_groups,
+            cells_per_group=cells_per_group, balance=balance,
+            example_groups=sorted(str(v) for v in vc.index)[:max_example_groups],
+        )
+        if best is None or prof.balance > best.balance:
+            best = prof
+    return best
+
+
 def profile_obs(obs, obs_names=None, *, max_example_values: int = 8,
                 max_composite_pairs: int = 8) -> ObsDigest:
     if obs_names is None:
@@ -98,5 +125,5 @@ def profile_obs(obs, obs_names=None, *, max_example_values: int = 8,
         n_obs=n_obs,
         columns=columns,
         composite_candidates=_composite_candidates(obs, columns, n_obs, max_composite_pairs),
-        barcode=None,
+        barcode=_barcode_profile(obs_names, n_obs),
     )

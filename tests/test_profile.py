@@ -45,7 +45,10 @@ def test_flags_and_dtypes():
 
 def test_barcode_empty_at_this_stage():
     d = profile_obs(_obs())
-    assert d.barcode is None
+    assert d.barcode is not None
+    assert d.barcode.position == "prefix"
+    assert d.barcode.delimiter == "_"
+    assert d.barcode.n_groups == 3
 
 
 def test_empty_obs():
