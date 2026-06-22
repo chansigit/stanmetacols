@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "stanmetacols"
 version = "0.2.0"
-description = "Identify which AnnData .obs columns fill standard metadata roles (sample, pct_mt, pct_hb, doublet_score, n_counts, n_genes)"
+description = "Identify which AnnData .obs columns fill standard metadata roles (sample, pct_mt, pct_hb, doublet_score, n_counts, n_genes, cell_type_coarse, cell_type_fine)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"

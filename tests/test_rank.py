@@ -111,19 +111,41 @@ def test_no_adjudication_when_clear_winner():
          "score": 0.95, "reason": "clear"},
         {"role": "n_counts", "column": "total_counts_mt", "kind": "single",
          "score": 0.40, "reason": "weak"}])
-    # second response would raise if called
+    # second response would raise if called; call counter proves stage-2 never fires
     class _OneCall:
         def __init__(self, payload):
             self._p = [payload]
+            self.call_count = 0
+            outer = self
             class _M:
                 def parse(_s, **kw):
-                    class _R: parsed_output = self._p.pop(0)
+                    outer.call_count += 1
+                    class _R: parsed_output = outer._p.pop(0)
                     return _R()
             self.messages = _M()
+    stub = _OneCall(stage1)
     res = rank_meta_columns(_ambiguous_obs(), roles=["n_counts"], use_llm=True,
-                            client=_OneCall(stage1))
+                            client=stub)
     assert res.method == "llm (anthropic)"     # no " + adjudication"
     assert res.top("n_counts").column == "total_counts"
+    assert stub.call_count == 1               # stage-1 only, no stage-2
+
+
+def test_top_k_zero_and_none_return_all():
+    obs = _obs()
+    k0 = rank_meta_columns(obs, use_llm=False, top_k=0)
+    kn = rank_meta_columns(obs, use_llm=False, top_k=None)
+    k1 = rank_meta_columns(obs, use_llm=False, top_k=1)
+    for role in k0.roles:
+        assert k0.roles[role] == kn.roles[role]      # 0 and None both mean "all"
+        assert len(k1.roles[role]) <= 1               # top_k=1 truncates
+
+
+def test_dataframe_with_obs_column_not_mistaken_for_anndata():
+    df = pd.DataFrame({"obs": ["S1"] * 3 + ["S2"] * 3, "x": list(range(6))},
+                      index=[f"c{i}" for i in range(6)])
+    res = rank_meta_columns(df, use_llm=False)        # must not crash treating df as AnnData
+    assert res.method == "heuristic"
 
 
 def test_adjudication_failure_keeps_stage1():

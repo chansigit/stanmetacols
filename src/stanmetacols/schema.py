@@ -1,4 +1,4 @@
-"""Shared types: digest dataclasses, Candidate/MetaColsResult, Pydantic output schema."""
+"""Shared types: digest dataclasses, Candidate/MetaColsResult, Pydantic schemas."""
 
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ class MetaColsResult:
 class RankedCandidate(BaseModel):
     role: str
     column: str
-    kind: str
+    kind: str = "single"
     score: float
     reason: str
 

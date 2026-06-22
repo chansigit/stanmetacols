@@ -3,7 +3,7 @@ roles) a value-shape check. Pure functions, no LLM, no network."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .schema import ColumnProfile
 
@@ -11,7 +11,7 @@ from .schema import ColumnProfile
 @dataclass(frozen=True)
 class Role:
     key: str
-    type: str                       # "grouping" | "numeric"
+    type: str                       # "grouping" | "numeric" | "celltype"
     aliases: tuple = ()             # raw names; matched after normalization
     include_tokens: tuple = ()      # any present (substring of norm name) -> token hit
     exclude_tokens: tuple = ()      # any present -> token rule fails

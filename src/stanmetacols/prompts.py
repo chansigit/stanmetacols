@@ -47,7 +47,7 @@ SYSTEM_PROMPT = (
     "Return JSON only, matching the schema: a list of candidates, each with "
     "`role` (one of the requested roles), `column` (the .obs column name; for the "
     "sample role a composite may use its exact 'a + b' label or the barcode "
-    "label), `kind` ('single'|'composite'|'barcode'), `score` in 0..1, and a "
+    "label), `score` in 0..1, and a "
     "one-sentence `reason`. Only include plausible candidates; omit a role "
     "entirely if no column fits."
 )

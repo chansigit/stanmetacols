@@ -144,3 +144,10 @@ def test_hint_reaches_user_prompt():
     rank_with_llm(_digest(), ["sample"], hint="HINTTOKEN", client=client)
     content = client.messages.kwargs["messages"][0]["content"]
     assert "HINTTOKEN" in content
+
+
+def test_hint_reaches_openai_user_prompt():
+    client = _StubOpenAIClient(json.dumps({"candidates": []}))
+    rank_with_llm(_digest(), ["sample"], hint="OAHINT", provider="openai", client=client)
+    content = client.completions.kwargs["messages"][1]["content"]
+    assert "OAHINT" in content
