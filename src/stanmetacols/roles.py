@@ -60,10 +60,24 @@ ROLES: dict = {
         aliases=("n_genes", "n_genes_by_counts", "nfeature_rna", "n_features",
                  "num_genes", "genes_detected", "detected_genes"),
         include_tokens=("gene", "genes", "feature", "features")),
+    "cell_type_coarse": Role(
+        key="cell_type_coarse", type="celltype",
+        aliases=("cell_type_coarse", "coarse_cell_type", "celltype_coarse",
+                 "major_celltype", "celltype_major", "major_cell_type",
+                 "broad_celltype", "cell_type_major", "lineage", "compartment",
+                 "celltype_l1", "cell_type_l1", "level1")),
+    "cell_type_fine": Role(
+        key="cell_type_fine", type="celltype",
+        aliases=("cell_type_fine", "fine_cell_type", "celltype_fine",
+                 "cell_subtype", "subtype", "celltype_sub", "minor_celltype",
+                 "detailed_celltype", "celltype_l2", "cell_type_l2",
+                 "celltype_l3", "level2")),
 }
 
-ROLE_KEYS = ("sample", "pct_mt", "pct_hb", "doublet_score", "n_counts", "n_genes")
+ROLE_KEYS = ("sample", "pct_mt", "pct_hb", "doublet_score", "n_counts",
+             "n_genes", "cell_type_coarse", "cell_type_fine")
 NUMERIC_ROLE_KEYS = ("pct_mt", "pct_hb", "doublet_score", "n_counts", "n_genes")
+CELLTYPE_ROLE_KEYS = ("cell_type_coarse", "cell_type_fine")
 
 
 def _token_rule(n: str, role: Role) -> bool:
@@ -124,3 +138,32 @@ def value_check(profile: ColumnProfile, role: Role) -> float:
     if role.key == "n_genes":
         return _genes_value_check(profile)
     return 0.0
+
+
+CELLTYPE_VOCAB = (
+    "epithelial", "endothelial", "immune", "stromal", "fibroblast", "macrophage",
+    "lymphocyte", "monocyte", "neutrophil", "dendritic", "plasma", "mast",
+    "myeloid", "lymphoid", "mesenchymal", "pericyte", "chondrocyte", "osteoblast",
+    "astrocyte", "oligodendrocyte", "microglia", "keratinocyte", "melanocyte",
+    "hepatocyte", "enterocyte", "goblet", "basal", "luminal", "secretory",
+    "ciliated", "progenitor", "neuron", "erythro", "platelet", "tcell", "bcell",
+    "nkcell", "cell", "cyte", "blast",
+)
+
+_CELLTYPE_NAME_TOKENS = ("celltype", "annotation", "celllabel", "cellclass",
+                         "cellidentity", "cellontology", "clustername", "celltypes")
+
+
+def celltype_value_frac(profile) -> float:
+    """Fraction of the profile's example values that contain a cell-type term."""
+    vals = [normalize(str(v)) for v in profile.example_values]
+    if not vals:
+        return 0.0
+    hits = sum(1 for v in vals if any(t in v for t in CELLTYPE_VOCAB))
+    return hits / len(vals)
+
+
+def celltype_name_base(col: str) -> float:
+    """1.0 if the column name itself reads like a generic cell-type label."""
+    n = normalize(col)
+    return 1.0 if any(t in n for t in _CELLTYPE_NAME_TOKENS) else 0.0

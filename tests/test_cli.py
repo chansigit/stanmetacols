@@ -62,3 +62,17 @@ def test_cli_hint_accepted_offline(tmp_path, capsys):
     assert code == 0
     out = json.loads(capsys.readouterr().out)
     assert out["roles"]["sample"][0]["column"] == "sample"
+
+
+def test_cli_default_roles_include_celltype(tmp_path, capsys):
+    p = tmp_path / "ct.h5ad"
+    n = 30
+    obs = pd.DataFrame({"sample": ["S1"] * 15 + ["S2"] * 15,
+                        "cell_type": (["Epithelial"] * 10 + ["Immune"] * 10
+                                      + ["Stromal"] * 10)})
+    _write(p, obs, [f"c{i}" for i in range(n)])
+    code = main([str(p), "--no-llm"])
+    assert code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "cell_type_coarse" in out["roles"] and "cell_type_fine" in out["roles"]
+    assert out["roles"]["cell_type_coarse"][0]["column"] == "cell_type"

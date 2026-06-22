@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from .schema import ObsDigest, Candidate
-from .roles import ROLES, name_signal, value_check
+from .roles import (ROLES, name_signal, value_check, celltype_value_frac,
+                    celltype_name_base)
 from .roles import normalize as _normalize
 
 _SAMPLE_ALIASES = {_normalize(a) for a in ROLES["sample"].aliases}
@@ -96,9 +97,49 @@ def _rank_numeric(digest: ObsDigest, role) -> list:
     return out
 
 
+_COARSE_CARD = (2, 25)
+_FINE_CARD = (5, 200)
+
+
+def _card_fit(n_unique: int, role_key: str) -> float:
+    lo, hi = _COARSE_CARD if role_key == "cell_type_coarse" else _FINE_CARD
+    return 1.0 if lo <= n_unique <= hi else 0.3
+
+
+def _rank_celltype(digest: ObsDigest, role) -> list:
+    out = []
+    for c in digest.columns:
+        if c.single_value or c.unique_per_cell:
+            continue
+        if c.dtype not in ("categorical", "string"):
+            continue
+        ns = name_signal(c.name, role)          # role-specific (coarse/fine) aliases
+        base = celltype_name_base(c.name)       # generic "celltype"/"annotation" name
+        vocab = celltype_value_frac(c)
+        name_score = max(ns, 0.6 * base)
+        if name_score <= 0 and vocab < 0.5:     # must look like a cell-type column
+            continue
+        card = _card_fit(c.n_unique, role.key)
+        score = max(0.0, min(1.0, 0.4 * name_score + 0.4 * vocab + 0.2 * card))
+        if score <= 0:
+            continue
+        out.append(Candidate(
+            role=role.key, column=c.name, kind="single", score=score,
+            source="heuristic",
+            reason=(f"name={name_score:.1f}, celltype_vocab={vocab:.2f}, "
+                    f"n_unique={c.n_unique}")))
+    out.sort(key=lambda c: c.score, reverse=True)
+    return out
+
+
 def rank_heuristic(digest: ObsDigest, roles) -> dict:
     out = {}
     for key in roles:
         role = ROLES[key]
-        out[key] = _rank_sample(digest) if role.type == "grouping" else _rank_numeric(digest, role)
+        if role.type == "grouping":
+            out[key] = _rank_sample(digest)
+        elif role.type == "numeric":
+            out[key] = _rank_numeric(digest, role)
+        else:                                    # "celltype"
+            out[key] = _rank_celltype(digest, role)
     return out

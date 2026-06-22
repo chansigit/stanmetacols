@@ -14,6 +14,10 @@ _ROLE_DESCRIPTIONS = {
     "doublet_score": "per-cell doublet detection score (a float in [0,1])",
     "n_counts": "total counts / UMIs per cell (a non-negative integer, large)",
     "n_genes": "number of genes detected per cell (a non-negative integer)",
+    "cell_type_coarse": ("coarse/broad cell-type or lineage label per cell "
+                         "(e.g. Epithelial, Endothelial, Immune, Stromal); FEWER categories"),
+    "cell_type_fine": ("fine-grained cell-type / subtype label per cell "
+                       "(e.g. CD8+ T cell, Capillary endothelial); MORE categories"),
 }
 
 
@@ -36,6 +40,10 @@ SYSTEM_PROMPT = (
     "Distinguish look-alikes: total_counts is the per-cell total, while "
     "total_counts_mt / total_counts_hb are subset counts and are NOT n_counts; "
     "n_genes_by_counts is n_genes, not n_counts.\n\n"
+    "For the two cell-type roles, judge by the column's values and cardinality: "
+    "broad lineage names with few categories are cell_type_coarse; specific "
+    "subtype names with many categories are cell_type_fine. A dataset may have "
+    "both, one, or neither.\n\n"
     "Return JSON only, matching the schema: a list of candidates, each with "
     "`role` (one of the requested roles), `column` (the .obs column name; for the "
     "sample role a composite may use its exact 'a + b' label or the barcode "

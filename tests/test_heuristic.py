@@ -3,6 +3,21 @@ from stanmetacols.profile import profile_obs
 from stanmetacols.heuristic import rank_heuristic
 from stanmetacols.roles import ROLE_KEYS
 
+_FINE_TYPES = ["CD4 T cell", "CD8 T cell", "B cell", "NK cell", "Plasma cell",
+               "Macrophage", "Monocyte", "Dendritic cell", "Mast cell",
+               "Fibroblast", "Endothelial cell", "Epithelial cell"]
+
+
+def _celltype_digest():
+    n = 60
+    coarse = (["Epithelial"] * 20 + ["Immune"] * 20 + ["Stromal"] * 20)
+    fine = [_FINE_TYPES[i % len(_FINE_TYPES)] for i in range(n)]   # 12 distinct
+    return profile_obs(pd.DataFrame({
+        "cell_type": coarse,                 # 3 broad lineages, low cardinality
+        "subtype": fine,                     # 12 specific cell-type names
+        "tissue": ["lung"] * 30 + ["liver"] * 30,   # NOT a cell type
+    }, index=[f"c{i}" for i in range(n)]))
+
 
 def _digest():
     n = 60
@@ -39,3 +54,15 @@ def test_value_guard_rejects_unit_column_for_counts():
                                  index=[f"c{i}" for i in range(50)]))
     cands = rank_heuristic(d, ["n_counts"])["n_counts"]
     assert all(c.score < 0.7 for c in cands)    # name may hit, value does not
+
+
+def test_celltype_roles_pick_right_columns():
+    out = rank_heuristic(_celltype_digest(), ["cell_type_coarse", "cell_type_fine"])
+    assert out["cell_type_coarse"][0].column == "cell_type"
+    assert out["cell_type_fine"][0].column == "subtype"
+
+
+def test_non_celltype_column_not_surfaced():
+    out = rank_heuristic(_celltype_digest(), ["cell_type_coarse"])
+    cols = [c.column for c in out["cell_type_coarse"]]
+    assert "tissue" not in cols       # tissue values aren't cell-type names

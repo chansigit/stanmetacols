@@ -1,6 +1,8 @@
 import pandas as pd
 from stanmetacols.profile import profile_obs
-from stanmetacols.roles import ROLES, ROLE_KEYS, name_signal, value_check
+from stanmetacols.roles import (ROLES, ROLE_KEYS, name_signal, value_check,
+                                CELLTYPE_ROLE_KEYS, celltype_value_frac,
+                                celltype_name_base)
 
 
 def _profile(values):
@@ -9,7 +11,31 @@ def _profile(values):
 
 def test_role_keys():
     assert ROLE_KEYS == ("sample", "pct_mt", "pct_hb", "doublet_score",
-                         "n_counts", "n_genes")
+                         "n_counts", "n_genes", "cell_type_coarse", "cell_type_fine")
+
+
+def test_role_keys_include_celltype():
+    assert ROLE_KEYS[-2:] == ("cell_type_coarse", "cell_type_fine")
+    assert CELLTYPE_ROLE_KEYS == ("cell_type_coarse", "cell_type_fine")
+    assert ROLES["cell_type_coarse"].type == "celltype"
+    assert ROLES["cell_type_fine"].type == "celltype"
+
+
+def test_celltype_value_frac_high_for_celltypes():
+    prof = _profile(["Epithelial cells", "Immune cells", "Stromal cells",
+                     "Endothelial cells"])
+    assert celltype_value_frac(prof) >= 0.9
+
+
+def test_celltype_value_frac_low_for_non_celltypes():
+    prof = _profile(["lung", "liver", "kidney", "brain"])
+    assert celltype_value_frac(prof) <= 0.25
+
+
+def test_celltype_name_base():
+    assert celltype_name_base("cell_type") == 1.0
+    assert celltype_name_base("annotation") == 1.0
+    assert celltype_name_base("total_counts") == 0.0
 
 
 def test_name_exact_and_token_and_substring():
