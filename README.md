@@ -1,9 +1,15 @@
 # stanmetacols
 
+[![Version](https://img.shields.io/badge/version-0.2.0-orange)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 Identify which AnnData `.obs` columns fill standard **metadata roles** in a
 single-cell dataset — sample grouping, per-cell QC fractions, count/gene
 statistics, and cell-type labels. It **ranks** candidates for each role; it does
 not decide.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 **8 roles, 3 types:** `sample` (grouping); `pct_mt`, `pct_hb`,
 `doublet_score`, `n_counts`, `n_genes` (numeric per-cell); `cell_type_coarse`,
