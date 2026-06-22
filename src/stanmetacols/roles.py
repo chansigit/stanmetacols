@@ -11,11 +11,12 @@ from .schema import ColumnProfile
 @dataclass(frozen=True)
 class Role:
     key: str
-    type: str                       # "grouping" | "numeric" | "celltype"
+    type: str                       # "grouping" | "numeric" | "celltype" | "organ" | "tissue"
     aliases: tuple = ()             # raw names; matched after normalization
     include_tokens: tuple = ()      # any present (substring of norm name) -> token hit
     exclude_tokens: tuple = ()      # any present -> token rule fails
     measure_tokens: tuple = ()      # for pct roles: a measure word must co-occur
+    vocab: tuple = ()               # value vocabulary (normalized) for vocab-typed roles
 
 
 def normalize(name: str) -> str:
@@ -72,12 +73,36 @@ ROLES: dict = {
                  "cell_subtype", "subtype", "celltype_sub", "minor_celltype",
                  "detailed_celltype", "celltype_l2", "cell_type_l2",
                  "celltype_l3", "level2")),
+    "organ": Role(
+        key="organ", type="organ",
+        aliases=("organ", "organ_type", "source_organ", "organ_of_origin",
+                 "organ_name"),
+        include_tokens=("organ",),
+        exclude_tokens=("organism",),
+        vocab=("heart", "liver", "kidney", "lung", "brain", "spleen",
+               "pancreas", "stomach", "intestine", "colon", "ileum", "jejunum",
+               "duodenum", "esophagus", "skin", "muscle", "bladder", "prostate",
+               "ovary", "uterus", "testis", "thyroid", "adrenal", "trachea",
+               "tongue", "gallbladder", "breast", "placenta", "thymus")),
+    "tissue": Role(
+        key="tissue", type="tissue",
+        aliases=("tissue", "tissue_type", "source_tissue", "anatomical_site",
+                 "body_site", "sample_site", "biomaterial", "biosample",
+                 "biopsy_site", "sampling_site"),
+        include_tokens=("tissue", "anatomicalsite", "bodysite", "biomaterial",
+                        "biosample"),
+        vocab=("blood", "pbmc", "peripheralblood", "wholeblood", "bonemarrow",
+               "marrow", "lymphnode", "tumor", "tumour", "biopsy", "csf",
+               "cerebrospinal", "bal", "bronchoalveolar", "ascites", "pleural",
+               "synovial", "plasma", "serum", "cordblood", "buffycoat",
+               "adipose")),
 }
 
 ROLE_KEYS = ("sample", "pct_mt", "pct_hb", "doublet_score", "n_counts",
-             "n_genes", "cell_type_coarse", "cell_type_fine")
+             "n_genes", "cell_type_coarse", "cell_type_fine", "organ", "tissue")
 NUMERIC_ROLE_KEYS = ("pct_mt", "pct_hb", "doublet_score", "n_counts", "n_genes")
 CELLTYPE_ROLE_KEYS = ("cell_type_coarse", "cell_type_fine")
+VOCAB_ROLE_KEYS = ("organ", "tissue")
 
 
 def _token_rule(n: str, role: Role) -> bool:
@@ -167,3 +192,25 @@ def celltype_name_base(col: str) -> float:
     """1.0 if the column name itself reads like a generic cell-type label."""
     n = normalize(col)
     return 1.0 if any(t in n for t in _CELLTYPE_NAME_TOKENS) else 0.0
+
+
+def vocab_value_frac(profile, role) -> float:
+    """Fraction of the profile's example values containing a term from the
+    role's value vocabulary (normalized substring match)."""
+    vals = [normalize(str(v)) for v in profile.example_values]
+    if not vals or not role.vocab:
+        return 0.0
+    hits = sum(1 for v in vals if any(t in v for t in role.vocab))
+    return hits / len(vals)
+
+
+def vocab_name_base(col: str, role) -> float:
+    """1.0 if the column name carries one of the role's include tokens and none
+    of its exclude tokens (e.g. an 'organ'/'tissue' column; 'organism' is
+    guarded out), else 0.0."""
+    n = normalize(col)
+    if not role.include_tokens:
+        return 0.0
+    if any(t in n for t in role.exclude_tokens):
+        return 0.0
+    return 1.0 if any(t in n for t in role.include_tokens) else 0.0

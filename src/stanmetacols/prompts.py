@@ -18,6 +18,10 @@ _ROLE_DESCRIPTIONS = {
                          "(e.g. Epithelial, Endothelial, Immune, Stromal); FEWER categories"),
     "cell_type_fine": ("fine-grained cell-type / subtype label per cell "
                        "(e.g. CD8+ T cell, Capillary endothelial); MORE categories"),
+    "organ": ("the solid anatomical organ a cell came from "
+              "(e.g. Heart, Liver, Kidney, Lung, Brain)"),
+    "tissue": ("the sampled biological material / anatomical site "
+               "(e.g. Blood, PBMC, Bone marrow, Lymph node, Tumor, Biopsy, CSF)"),
 }
 
 

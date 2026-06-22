@@ -2,7 +2,8 @@ import pandas as pd
 from stanmetacols.profile import profile_obs
 from stanmetacols.roles import (ROLES, ROLE_KEYS, name_signal, value_check,
                                 CELLTYPE_ROLE_KEYS, celltype_value_frac,
-                                celltype_name_base)
+                                celltype_name_base, VOCAB_ROLE_KEYS,
+                                vocab_value_frac, vocab_name_base)
 
 
 def _profile(values):
@@ -11,11 +12,12 @@ def _profile(values):
 
 def test_role_keys():
     assert ROLE_KEYS == ("sample", "pct_mt", "pct_hb", "doublet_score",
-                         "n_counts", "n_genes", "cell_type_coarse", "cell_type_fine")
+                         "n_counts", "n_genes", "cell_type_coarse",
+                         "cell_type_fine", "organ", "tissue")
 
 
 def test_role_keys_include_celltype():
-    assert ROLE_KEYS[-2:] == ("cell_type_coarse", "cell_type_fine")
+    assert ROLE_KEYS[6:8] == ("cell_type_coarse", "cell_type_fine")
     assert CELLTYPE_ROLE_KEYS == ("cell_type_coarse", "cell_type_fine")
     assert ROLES["cell_type_coarse"].type == "celltype"
     assert ROLES["cell_type_fine"].type == "celltype"
@@ -65,3 +67,29 @@ def test_value_check_integer_counts():
 def test_value_check_genes_band():
     prof = _profile([200, 1500, 4000, 9000])
     assert value_check(prof, ROLES["n_genes"]) == 1.0
+
+
+def test_organ_tissue_registered_with_specific_types():
+    assert ROLE_KEYS[-2:] == ("organ", "tissue")
+    assert VOCAB_ROLE_KEYS == ("organ", "tissue")
+    assert ROLES["organ"].type == "organ"
+    assert ROLES["tissue"].type == "tissue"
+    # the durable rule: no generic "categorical" bucket
+    assert ROLES["organ"].type != "categorical"
+    assert ROLES["tissue"].type != "categorical"
+
+
+def test_vocab_value_frac_disjoint():
+    organ_prof = _profile(["heart", "liver", "lung", "kidney"])
+    tissue_prof = _profile(["blood", "PBMC", "bone marrow", "lymph node"])
+    assert vocab_value_frac(organ_prof, ROLES["organ"]) >= 0.9
+    assert vocab_value_frac(organ_prof, ROLES["tissue"]) <= 0.1
+    assert vocab_value_frac(tissue_prof, ROLES["tissue"]) >= 0.9
+    assert vocab_value_frac(tissue_prof, ROLES["organ"]) <= 0.1
+
+
+def test_vocab_name_base_with_organism_guard():
+    assert vocab_name_base("organ", ROLES["organ"]) == 1.0
+    assert vocab_name_base("tissue", ROLES["tissue"]) == 1.0
+    assert vocab_name_base("organism", ROLES["organ"]) == 0.0   # guard
+    assert vocab_name_base("sample", ROLES["organ"]) == 0.0
