@@ -35,8 +35,8 @@ class _StubClient:
 
 def test_maps_and_filters_hallucinations():
     parsed = RankedCandidates(candidates=[
-        {"column": "sample_id", "kind": "single", "score": 0.9, "reason": "looks like a sample id"},
-        {"column": "made_up_column", "kind": "single", "score": 0.8, "reason": "hallucinated"},
+        {"role": "sample", "column": "sample_id", "kind": "single", "score": 0.9, "reason": "looks like a sample id"},
+        {"role": "sample", "column": "made_up_column", "kind": "single", "score": 0.8, "reason": "hallucinated"},
     ])
     client = _StubClient(parsed)
     out = rank_with_llm(_digest(), client=client)
@@ -94,8 +94,8 @@ class _StubOpenAIClient:
 
 def test_openai_parses_json_and_filters_hallucinations():
     content = json.dumps({"candidates": [
-        {"column": "sample_id", "kind": "single", "score": 0.9, "reason": "ok"},
-        {"column": "made_up", "kind": "single", "score": 0.8, "reason": "halluc"},
+        {"role": "sample", "column": "sample_id", "kind": "single", "score": 0.9, "reason": "ok"},
+        {"role": "sample", "column": "made_up", "kind": "single", "score": 0.8, "reason": "halluc"},
     ]})
     client = _StubOpenAIClient(content)
     out = rank_with_llm(_digest(), provider="openai", client=client)
@@ -108,7 +108,7 @@ def test_openai_parses_json_and_filters_hallucinations():
 
 def test_openai_strips_markdown_code_fences():
     body = json.dumps({"candidates": [
-        {"column": "sample_id", "kind": "single", "score": 0.7, "reason": "x"}]})
+        {"role": "sample", "column": "sample_id", "kind": "single", "score": 0.7, "reason": "x"}]})
     client = _StubOpenAIClient("```json\n" + body + "\n```")
     out = rank_with_llm(_digest(), provider="openai", client=client)
     assert [c.column for c in out] == ["sample_id"]
@@ -116,7 +116,7 @@ def test_openai_strips_markdown_code_fences():
 
 def test_openai_accepts_bare_json_array():
     content = json.dumps([
-        {"column": "sample_id", "kind": "single", "score": 0.6, "reason": "x"}])
+        {"role": "sample", "column": "sample_id", "kind": "single", "score": 0.6, "reason": "x"}])
     out = rank_with_llm(_digest(), provider="openai", client=_StubOpenAIClient(content))
     assert [c.column for c in out] == ["sample_id"]
 

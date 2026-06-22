@@ -1,9 +1,18 @@
 # tests/test_schema.py
+import pytest
+import pandas as pd
 import stanmetacols
 from stanmetacols.schema import (
     Candidate, RankResult, ObsDigest, ColumnProfile, CompositeProfile,
     BarcodeProfile, RankedCandidate, RankedCandidates, LLMUnavailable,
+    MetaColsResult, Adjudications,
 )
+from stanmetacols.profile import profile_obs
+
+
+@pytest.fixture
+def digest_fixture():
+    return profile_obs(pd.DataFrame({"sample": ["A", "B"]}))
 
 
 def test_version():
@@ -12,7 +21,7 @@ def test_version():
 
 def test_candidate_and_result_top():
     digest = ObsDigest(n_obs=1, columns=[], composite_candidates=[], barcode=None)
-    c = Candidate(column="sample_id", kind="single", score=0.9, reason="r", source="heuristic")
+    c = Candidate(role="sample", column="sample_id", kind="single", score=0.9, reason="r", source="heuristic")
     assert RankResult(candidates=[c], method="heuristic", digest=digest).top() is c
     assert RankResult(candidates=[], method="x", digest=digest).top() is None
 
@@ -43,9 +52,31 @@ def test_to_prompt_dict_is_jsonable():
 
 
 def test_pydantic_schema():
-    rc = RankedCandidates(candidates=[{"column": "a", "kind": "single", "score": 0.5, "reason": "x"}])
+    rc = RankedCandidates(candidates=[{"role": "sample", "column": "a", "kind": "single", "score": 0.5, "reason": "x"}])
     assert rc.candidates[0].column == "a"
 
 
 def test_llm_unavailable_is_exception():
     assert issubclass(LLMUnavailable, Exception)
+
+
+def test_candidate_has_role():
+    c = Candidate(role="sample", column="s", kind="single", score=0.9,
+                  reason="r", source="heuristic")
+    assert c.role == "sample"
+
+
+def test_metacolsresult_top(digest_fixture):
+    c = Candidate(role="pct_mt", column="pct_counts_mt", kind="single",
+                  score=0.9, reason="r", source="llm")
+    res = MetaColsResult(roles={"pct_mt": [c], "sample": []},
+                         method="heuristic", digest=digest_fixture)
+    assert res.top("pct_mt") is c
+    assert res.top("sample") is None
+    assert res.top("n_genes") is None        # role absent -> None
+
+
+def test_adjudications_schema():
+    a = Adjudications(verdicts=[{"role": "n_counts", "column": "total_counts",
+                                 "reason": "canonical total"}])
+    assert a.verdicts[0].column == "total_counts"

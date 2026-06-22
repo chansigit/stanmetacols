@@ -149,7 +149,7 @@ def rank_with_llm(digest: ObsDigest, *, provider: str = "anthropic",
         if kind is None:           # hallucinated / unknown column -> drop
             continue
         score = max(0.0, min(1.0, float(rc.score)))
-        out.append(Candidate(column=rc.column, kind=kind, score=score,
-                             reason=rc.reason, source="llm"))
+        out.append(Candidate(role=rc.role, column=rc.column, kind=kind,
+                             score=score, reason=rc.reason, source="llm"))
     out.sort(key=lambda c: c.score, reverse=True)
     return out

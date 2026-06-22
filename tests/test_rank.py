@@ -36,7 +36,7 @@ def test_no_llm_uses_heuristic():
 
 def test_llm_path_with_mock_client():
     parsed = RankedCandidates(candidates=[
-        {"column": "sample_id", "kind": "single", "score": 0.95, "reason": "ok"}])
+        {"role": "sample", "column": "sample_id", "kind": "single", "score": 0.95, "reason": "ok"}])
     res = rank_sample_columns(_obs(), use_llm=True, client=_StubClient(parsed))
     assert res.method == "llm (anthropic)"
     assert res.top().column == "sample_id"

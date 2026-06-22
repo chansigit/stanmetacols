@@ -52,7 +52,7 @@ def rank_heuristic(digest: ObsDigest) -> list[Candidate]:
         if score <= 0:
             continue
         out.append(Candidate(
-            column=c.name, kind="single", score=score, source="heuristic",
+            role="sample", column=c.name, kind="single", score=score, source="heuristic",
             reason=(f"name match={name_sig:.1f}, n_unique={c.n_unique}, "
                     f"balance={c.balance:.2f}")))
     for comp in digest.composite_candidates:
@@ -64,7 +64,7 @@ def rank_heuristic(digest: ObsDigest) -> list[Candidate]:
         if score <= 0:
             continue
         out.append(Candidate(
-            column=comp.label, kind="composite", score=score, source="heuristic",
+            role="sample", column=comp.label, kind="composite", score=score, source="heuristic",
             reason=(f"composite of {comp.columns}, n_unique={comp.n_unique}, "
                     f"balance={comp.balance:.2f}")))
     if digest.barcode is not None:
@@ -72,7 +72,7 @@ def rank_heuristic(digest: ObsDigest) -> list[Candidate]:
         score = max(0.0, min(1.0, 0.45 * bc.balance + 0.1))
         if score > 0:
             out.append(Candidate(
-                column=bc.label, kind="barcode", score=score, source="heuristic",
+                role="sample", column=bc.label, kind="barcode", score=score, source="heuristic",
                 reason=(f"barcode {bc.position} on '{bc.delimiter}', "
                         f"{bc.n_groups} groups, balance={bc.balance:.2f}")))
     out.sort(key=lambda c: c.score, reverse=True)

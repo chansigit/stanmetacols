@@ -90,11 +90,23 @@ class ObsDigest:
 
 @dataclass
 class Candidate:
+    role: str
     column: str
     kind: str              # "single" | "composite" | "barcode"
     score: float
     reason: str
     source: str            # "llm" | "heuristic"
+
+
+@dataclass
+class MetaColsResult:
+    roles: dict            # role_key -> list[Candidate], sorted desc, truncated
+    method: str
+    digest: ObsDigest
+
+    def top(self, role: str):
+        cands = self.roles.get(role) or []
+        return cands[0] if cands else None
 
 
 @dataclass
@@ -108,6 +120,7 @@ class RankResult:
 
 
 class RankedCandidate(BaseModel):
+    role: str
     column: str
     kind: str
     score: float
@@ -116,3 +129,13 @@ class RankedCandidate(BaseModel):
 
 class RankedCandidates(BaseModel):
     candidates: List[RankedCandidate]
+
+
+class Adjudication(BaseModel):
+    role: str
+    column: str
+    reason: str
+
+
+class Adjudications(BaseModel):
+    verdicts: List[Adjudication]
