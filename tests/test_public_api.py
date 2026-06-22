@@ -2,7 +2,7 @@ import pandas as pd
 
 
 def test_top_level_exports():
-    from stansample import (
+    from stanmetacols import (
         rank_sample_columns, profile_obs, Candidate, RankResult,
         ObsDigest, LLMUnavailable, __version__,
     )

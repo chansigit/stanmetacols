@@ -3,7 +3,7 @@ import anndata
 import numpy as np
 import pandas as pd
 
-from stansample.__main__ import main
+from stanmetacols.__main__ import main
 
 
 def _write_h5ad(path, obs, names):

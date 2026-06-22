@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "stansample"
-version = "0.1.0"
-description = "Rank which AnnData .obs column identifies the sample each cell came from"
+name = "stanmetacols"
+version = "0.2.0"
+description = "Identify which AnnData .obs columns fill standard metadata roles (sample, pct_mt, pct_hb, doublet_score, n_counts, n_genes)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 authors = [{name = "chansigit"}]
-keywords = ["single-cell", "scRNA-seq", "anndata", "metadata", "sample"]
+keywords = ["single-cell", "scRNA-seq", "anndata", "metadata", "sample", "qc"]
 dependencies = ["pandas>=1.5", "numpy>=1.22", "pydantic>=2"]
 
 [project.optional-dependencies]
@@ -20,14 +20,14 @@ openai = ["openai>=1.0"]                  # OpenAI-compatible backend (OpenAI, A
 test = ["pytest>=7.0", "anndata>=0.8", "anthropic>=0.69", "openai>=1.0"]
 
 [project.scripts]
-stansample = "stansample.__main__:main"
+stanmetacols = "stanmetacols.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/chansigit/stansample"
-Repository = "https://github.com/chansigit/stansample"
+Homepage = "https://github.com/chansigit/stanmetacols"
+Repository = "https://github.com/chansigit/stanmetacols"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/stansample"]
+packages = ["src/stanmetacols"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

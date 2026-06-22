@@ -15,7 +15,7 @@ from .rank import rank_sample_columns
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        prog="stansample",
+        prog="stanmetacols",
         description="Rank which .obs column identifies the sample each cell came "
                     "from. Emits a JSON object on stdout.")
     parser.add_argument("path", help="path to an .h5ad file")

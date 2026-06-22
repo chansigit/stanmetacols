@@ -1,6 +1,6 @@
 import pandas as pd
 
-from stansample.profile import profile_obs
+from stanmetacols.profile import profile_obs
 
 
 def test_prefix_grouping_from_underscore():

@@ -4,9 +4,9 @@ import json
 import pandas as pd
 import pytest
 
-from stansample.profile import profile_obs
-from stansample.schema import RankedCandidates, LLMUnavailable
-from stansample.llm import rank_with_llm
+from stanmetacols.profile import profile_obs
+from stanmetacols.schema import RankedCandidates, LLMUnavailable
+from stanmetacols.llm import rank_with_llm
 
 
 def _digest():

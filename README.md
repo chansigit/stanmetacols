@@ -1,4 +1,4 @@
-# stansample
+# stanmetacols
 
 Rank which AnnData `.obs` column — or composite key, or barcode-derived
 grouping — identifies the **sample** each cell came from (the natural grouping
@@ -30,10 +30,10 @@ reads `OPENAI_API_KEY` / `OPENAI_BASE_URL` (see [Providers](#providers)).
 ## CLI
 
 ```bash
-stansample sample.h5ad              # LLM if key present, else heuristic
-stansample sample.h5ad --no-llm     # force offline heuristic
-stansample sample.h5ad --top 0      # all candidates (default: top 5)
-python -m stansample sample.h5ad    # equivalent module form
+stanmetacols sample.h5ad              # LLM if key present, else heuristic
+stanmetacols sample.h5ad --no-llm     # force offline heuristic
+stanmetacols sample.h5ad --top 0      # all candidates (default: top 5)
+python -m stanmetacols sample.h5ad    # equivalent module form
 ```
 
 | Flag | Default | Meaning |
@@ -55,7 +55,7 @@ output schema. Reads `ANTHROPIC_API_KEY`. Best structured-output guarantee; this
 is the path for Claude.
 
 ```bash
-stansample sample.h5ad                          # claude-opus-4-8
+stanmetacols sample.h5ad                          # claude-opus-4-8
 ```
 
 **`openai`** — any OpenAI-compatible `/chat/completions` endpoint (OpenAI,
@@ -67,16 +67,16 @@ validated against the same schema, with the same hallucination guard. Reads
 ```bash
 # OpenAI
 export OPENAI_API_KEY=sk-…
-stansample sample.h5ad --provider openai --model gpt-4o-mini
+stanmetacols sample.h5ad --provider openai --model gpt-4o-mini
 
 # Volcengine ARK (Doubao) — endpoint id as the model
 export OPENAI_API_KEY=$ARK_API_KEY
-stansample sample.h5ad --provider openai \
+stanmetacols sample.h5ad --provider openai \
     --base-url https://ark.cn-beijing.volces.com/api/v3 \
     --model ep-xxxxxxxxxxxx
 
-# …or keep ARK's own key var and let stansample read it:
-stansample sample.h5ad --provider openai \
+# …or keep ARK's own key var and let stanmetacols read it:
+stanmetacols sample.h5ad --provider openai \
     --base-url https://ark.cn-beijing.volces.com/api/v3 \
     --api-key-env ARK_API_KEY --model ep-xxxxxxxxxxxx
 ```
@@ -118,13 +118,13 @@ found (`candidates` is then `[]`). Diagnostics for unreadable files go to
 
 ```bash
 # e.g. take the single best column name, or empty if none:
-stansample sample.h5ad --no-llm | jq -r '.candidates[0].column // empty'
+stanmetacols sample.h5ad --no-llm | jq -r '.candidates[0].column // empty'
 ```
 
 ## Library
 
 ```python
-from stansample import rank_sample_columns
+from stanmetacols import rank_sample_columns
 
 res = rank_sample_columns(adata)          # or pass a pandas .obs DataFrame
 for c in res.candidates:                  # sorted by score, top 5 by default

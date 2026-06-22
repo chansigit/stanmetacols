@@ -2,8 +2,8 @@
 import numpy as np
 import pandas as pd
 
-from stansample.profile import profile_obs
-from stansample.heuristic import rank_heuristic
+from stanmetacols.profile import profile_obs
+from stanmetacols.heuristic import rank_heuristic
 
 
 def _obs():

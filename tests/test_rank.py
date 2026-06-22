@@ -1,8 +1,8 @@
 # tests/test_rank.py
 import pandas as pd
 
-from stansample.rank import rank_sample_columns
-from stansample.schema import LLMUnavailable, RankedCandidates
+from stanmetacols.rank import rank_sample_columns
+from stanmetacols.schema import LLMUnavailable, RankedCandidates
 
 
 def _obs():

@@ -1,4 +1,4 @@
-"""stansample — rank which .obs column identifies the sample each cell came from."""
+"""stanmetacols — rank which .obs column identifies the sample each cell came from."""
 
 from .schema import Candidate, RankResult, ObsDigest, LLMUnavailable
 from .profile import profile_obs

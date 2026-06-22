@@ -1,7 +1,7 @@
 import pandas as pd
 
-from stansample.prompts import SYSTEM_PROMPT, ALIAS_HINTS, build_user_prompt
-from stansample.profile import profile_obs
+from stanmetacols.prompts import SYSTEM_PROMPT, ALIAS_HINTS, build_user_prompt
+from stanmetacols.profile import profile_obs
 
 
 def test_alias_hints_present():

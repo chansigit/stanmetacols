@@ -1,4 +1,4 @@
-# stansample — algorithm formulation
+# stanmetacols — algorithm formulation
 
 A precise statement of what the code computes. Every symbol below maps to a
 named quantity in `profile.py`, `heuristic.py`, `llm.py`, or `rank.py`.

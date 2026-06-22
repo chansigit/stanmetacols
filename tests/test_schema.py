@@ -1,13 +1,13 @@
 # tests/test_schema.py
-import stansample
-from stansample.schema import (
+import stanmetacols
+from stanmetacols.schema import (
     Candidate, RankResult, ObsDigest, ColumnProfile, CompositeProfile,
     BarcodeProfile, RankedCandidate, RankedCandidates, LLMUnavailable,
 )
 
 
 def test_version():
-    assert stansample.__version__ == "0.1.0"
+    assert stanmetacols.__version__ == "0.1.0"
 
 
 def test_candidate_and_result_top():
