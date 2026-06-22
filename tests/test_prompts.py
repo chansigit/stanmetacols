@@ -28,3 +28,11 @@ def test_user_prompt_omits_block_when_hint_empty():
 def test_adjudication_prompt_includes_hint():
     p = build_adjudication_prompt(_d(), {}, hint="counts are in total_umis")
     assert "User guidance" in p and "total_umis" in p
+
+
+def test_prompts_discriminate_organ_and_tissue():
+    sp = SYSTEM_PROMPT.lower()
+    assert "organ" in sp and "tissue" in sp
+    # the discrimination guidance, not just the roles-block listing
+    assert "anatomical organ" in sp
+    assert "sampled" in sp and "material" in sp
