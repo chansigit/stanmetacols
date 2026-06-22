@@ -168,7 +168,7 @@ flowchart TD
     C2 --> D
     C3 --> D
 
-    D -- "yes" --> E["rank_with_llm<br/>single messages.parse call<br/>(claude-opus-4-8)"]
+    D -- "yes" --> E["rank_with_llm<br/>one structured LLM call<br/>anthropic | openai backend"]
     E -- "ok" --> G["candidates source=llm<br/>hallucinations dropped ·<br/>score clamped 0..1"]
     E -- "LLMUnavailable<br/>no key / no net / API error" --> F["rank_heuristic<br/>deterministic scoring"]
     D -- "no (--no-llm)" --> F
@@ -210,14 +210,16 @@ grouping is kept only if it yields `2 ≤ groups < n_obs`; the most balanced win
 
 ### Stage 2 — Rank (two paths, same digest)
 
-**LLM path** (`llm.py`) — one structured `client.messages.parse` call against
-`claude-opus-4-8`. The system prompt frames the task (*identify the sample
-grouping unit*) and supplies name hints; the user prompt is the digest as JSON.
-The reply is validated against the real candidate labels — **any column the
-model invents is dropped**, scores are clamped to `0..1`, and each candidate's
-`kind` is taken from the digest, not the model. Missing key, missing network,
-missing `anthropic`, API error, or unparseable output all raise `LLMUnavailable`
-→ automatic fallback.
+**LLM path** (`llm.py`) — one structured LLM call over the digest, through one of
+two backends (`--provider`, see [Providers](#providers)): native Anthropic
+`messages.parse` for Claude (default), or any OpenAI-compatible
+`/chat/completions` endpoint whose JSON reply is parsed against the same schema.
+The system prompt frames the task (*identify the sample grouping unit*) and
+supplies name hints; the user prompt is the digest as JSON. Either way the reply
+is validated against the real candidate labels — **any column the model invents
+is dropped**, scores are clamped to `0..1`, and each candidate's `kind` is taken
+from the digest, not the model. Missing key, missing network, missing SDK, API
+error, or unparseable output all raise `LLMUnavailable` → automatic fallback.
 
 **Heuristic path** (`heuristic.py`) — deterministic, offline. Single columns
 (skipping single-value and unique-per-cell) score:
@@ -240,8 +242,9 @@ Composite keys use the member-averaged name signal with a 15% discount
 ### Stage 3 — Report (`rank.py` → CLI)
 
 Candidates from whichever path ran are sorted by score (desc) and truncated to
-`top_k` (`top_k=0`/`None` ⇒ all). The result carries `method` (`"llm"` or
-`"heuristic (llm unavailable: …)"`) so you always know which path produced it.
+`top_k` (`top_k=0`/`None` ⇒ all). The result carries `method` (`"llm (<provider>)"`,
+`"heuristic"`, or `"heuristic (llm unavailable: …)"`) so you always know which
+path produced it.
 The CLI serializes this to a single JSON object on stdout (see
 [Output](#output)); the library hands back a `RankResult`, whose `.top()`
 returns the single best candidate — **but the tool ranks; you decide whether to
