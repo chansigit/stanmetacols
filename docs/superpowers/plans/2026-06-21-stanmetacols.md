@@ -1753,7 +1753,287 @@ git commit -m "feat: --hint user guidance threaded into both LLM calls (LLM-only
 
 ---
 
-## Task 8: Documentation rewrite (README + formulation)
+## Task 8: Cell-type roles (coarse + fine)
+
+**Files:**
+- Modify: `src/stanmetacols/roles.py`
+- Modify: `src/stanmetacols/heuristic.py`
+- Modify: `src/stanmetacols/prompts.py`
+- Test: `tests/test_roles.py`, `tests/test_heuristic.py`, `tests/test_cli.py`
+
+**Interfaces:**
+- Consumes: `Role`, `ROLES`, `ROLE_KEYS`, `normalize`, `name_signal` (roles.py); `rank_heuristic` dispatch (heuristic.py); `_ROLE_DESCRIPTIONS`, `SYSTEM_PROMPT` (prompts.py).
+- Produces: two new roles `cell_type_coarse` and `cell_type_fine` of a new `type="celltype"`; `ROLE_KEYS` grows to 8; `CELLTYPE_ROLE_KEYS`, `CELLTYPE_VOCAB`, `celltype_value_frac(profile)`, `celltype_name_base(col)` in roles.py; `_rank_celltype(digest, role)` in heuristic.py.
+
+Cell-type label columns are categorical and their VALUES are biological cell-type names — a different signal from `sample` (grouping) and the numeric roles. `cell_type_coarse` = broad lineages (Epithelial, Endothelial, Immune, Stromal), low cardinality; `cell_type_fine` = finest subtypes (CD8+ T cell), higher cardinality. Either/both/neither may be present. The heuristic uses name aliases + a cell-type value vocabulary + a cardinality band; the stage-1 LLM (already role-agnostic) reads the example values and makes the nuanced coarse-vs-fine call. NO change to `llm.py`, `rank.py`, or `__main__.py` — they iterate `ROLE_KEYS` generically, and stage-2 adjudication stays numeric-only (`NUMERIC_ROLE_KEYS` is unchanged).
+
+- [ ] **Step 1: Write the failing roles tests**
+
+Add to `tests/test_roles.py`:
+
+```python
+from stanmetacols.roles import (CELLTYPE_ROLE_KEYS, celltype_value_frac,
+                                celltype_name_base, ROLES)
+
+
+def test_role_keys_include_celltype():
+    assert ROLE_KEYS[-2:] == ("cell_type_coarse", "cell_type_fine")
+    assert CELLTYPE_ROLE_KEYS == ("cell_type_coarse", "cell_type_fine")
+    assert ROLES["cell_type_coarse"].type == "celltype"
+    assert ROLES["cell_type_fine"].type == "celltype"
+
+
+def test_celltype_value_frac_high_for_celltypes():
+    prof = _profile(["Epithelial cells", "Immune cells", "Stromal cells",
+                     "Endothelial cells"])
+    assert celltype_value_frac(prof) >= 0.9
+
+
+def test_celltype_value_frac_low_for_non_celltypes():
+    prof = _profile(["lung", "liver", "kidney", "brain"])
+    assert celltype_value_frac(prof) <= 0.25
+
+
+def test_celltype_name_base():
+    assert celltype_name_base("cell_type") == 1.0
+    assert celltype_name_base("annotation") == 1.0
+    assert celltype_name_base("total_counts") == 0.0
+```
+
+(`_profile` and `ROLE_KEYS` are already imported/defined at the top of `tests/test_roles.py` from Task 3.)
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `/scratch/users/chensj16/venvs/dl2025/.venv/bin/python -m pytest tests/test_roles.py -q`
+Expected: FAIL — `ImportError` for `CELLTYPE_ROLE_KEYS` / `celltype_value_frac` / `celltype_name_base`.
+
+- [ ] **Step 3: Add the celltype roles, vocabulary, and helpers to `roles.py`**
+
+Add the two roles to the `ROLES` dict:
+
+```python
+    "cell_type_coarse": Role(
+        key="cell_type_coarse", type="celltype",
+        aliases=("cell_type_coarse", "coarse_cell_type", "celltype_coarse",
+                 "major_celltype", "celltype_major", "major_cell_type",
+                 "broad_celltype", "cell_type_major", "lineage", "compartment",
+                 "celltype_l1", "cell_type_l1", "level1")),
+    "cell_type_fine": Role(
+        key="cell_type_fine", type="celltype",
+        aliases=("cell_type_fine", "fine_cell_type", "celltype_fine",
+                 "cell_subtype", "subtype", "celltype_sub", "minor_celltype",
+                 "detailed_celltype", "celltype_l2", "cell_type_l2",
+                 "celltype_l3", "level2")),
+```
+
+Extend `ROLE_KEYS` (append the two) and add `CELLTYPE_ROLE_KEYS`:
+
+```python
+ROLE_KEYS = ("sample", "pct_mt", "pct_hb", "doublet_score", "n_counts",
+             "n_genes", "cell_type_coarse", "cell_type_fine")
+NUMERIC_ROLE_KEYS = ("pct_mt", "pct_hb", "doublet_score", "n_counts", "n_genes")
+CELLTYPE_ROLE_KEYS = ("cell_type_coarse", "cell_type_fine")
+```
+
+Add the vocabulary and helpers (after `value_check`):
+
+```python
+CELLTYPE_VOCAB = (
+    "epithelial", "endothelial", "immune", "stromal", "fibroblast", "macrophage",
+    "lymphocyte", "monocyte", "neutrophil", "dendritic", "plasma", "mast",
+    "myeloid", "lymphoid", "mesenchymal", "pericyte", "chondrocyte", "osteoblast",
+    "astrocyte", "oligodendrocyte", "microglia", "keratinocyte", "melanocyte",
+    "hepatocyte", "enterocyte", "goblet", "basal", "luminal", "secretory",
+    "ciliated", "progenitor", "neuron", "erythro", "platelet", "tcell", "bcell",
+    "nkcell", "cell", "cyte", "blast",
+)
+
+_CELLTYPE_NAME_TOKENS = ("celltype", "annotation", "celllabel", "cellclass",
+                         "cellidentity", "cellontology", "clustername", "celltypes")
+
+
+def celltype_value_frac(profile) -> float:
+    """Fraction of the profile's example values that contain a cell-type term."""
+    vals = [normalize(str(v)) for v in profile.example_values]
+    if not vals:
+        return 0.0
+    hits = sum(1 for v in vals if any(t in v for t in CELLTYPE_VOCAB))
+    return hits / len(vals)
+
+
+def celltype_name_base(col: str) -> float:
+    """1.0 if the column name itself reads like a generic cell-type label."""
+    n = normalize(col)
+    return 1.0 if any(t in n for t in _CELLTYPE_NAME_TOKENS) else 0.0
+```
+
+- [ ] **Step 4: Run roles tests to verify pass**
+
+Run: `/scratch/users/chensj16/venvs/dl2025/.venv/bin/python -m pytest tests/test_roles.py -q`
+Expected: PASS.
+
+- [ ] **Step 5: Write the failing heuristic test**
+
+Add to `tests/test_heuristic.py`:
+
+```python
+_FINE_TYPES = ["CD4 T cell", "CD8 T cell", "B cell", "NK cell", "Plasma cell",
+               "Macrophage", "Monocyte", "Dendritic cell", "Mast cell",
+               "Fibroblast", "Endothelial cell", "Epithelial cell"]
+
+
+def _celltype_digest():
+    n = 60
+    coarse = (["Epithelial"] * 20 + ["Immune"] * 20 + ["Stromal"] * 20)
+    fine = [_FINE_TYPES[i % len(_FINE_TYPES)] for i in range(n)]   # 12 distinct
+    return profile_obs(pd.DataFrame({
+        "cell_type": coarse,                 # 3 broad lineages, low cardinality
+        "subtype": fine,                     # 12 specific cell-type names
+        "tissue": ["lung"] * 30 + ["liver"] * 30,   # NOT a cell type
+    }, index=[f"c{i}" for i in range(n)]))
+
+
+def test_celltype_roles_pick_right_columns():
+    out = rank_heuristic(_celltype_digest(), ["cell_type_coarse", "cell_type_fine"])
+    assert out["cell_type_coarse"][0].column == "cell_type"
+    assert out["cell_type_fine"][0].column == "subtype"
+
+
+def test_non_celltype_column_not_surfaced():
+    out = rank_heuristic(_celltype_digest(), ["cell_type_coarse"])
+    cols = [c.column for c in out["cell_type_coarse"]]
+    assert "tissue" not in cols       # tissue values aren't cell-type names
+```
+
+Why this ranks correctly: `cell_type` has the generic celltype name (base hit) + broad lineage values (Epithelial/Immune/Stromal, all vocab hits) + low cardinality (3) → top of `cell_type_coarse` (cardinality 3 fits the coarse band, not the fine band). `subtype` has the fine alias name (`name_signal == 1.0`) + cell-type-name values (all contain vocab tokens like "T cell"/"B cell") + cardinality 12 (fits the fine band) → top of `cell_type_fine`. Both real cell-type columns surface for both roles (single-column datasets stay ambiguous for the LLM to resolve), but the cardinality band + name push each to its correct role's #1. `tissue` (values lung/liver — no vocab hit, name not celltype-like) is dropped from both.
+
+- [ ] **Step 6: Run to verify it fails**
+
+Run: `/scratch/users/chensj16/venvs/dl2025/.venv/bin/python -m pytest tests/test_heuristic.py -q -k celltype`
+Expected: FAIL — `rank_heuristic` routes celltype roles nowhere yet (KeyError or empty results).
+
+- [ ] **Step 7: Add the celltype scorer and dispatch to `heuristic.py`**
+
+Add the import and scorer. Update the imports line to include the new helpers:
+
+```python
+from .roles import (ROLES, name_signal, value_check, celltype_value_frac,
+                    celltype_name_base)
+```
+
+Add the scorer:
+
+```python
+_COARSE_CARD = (2, 25)
+_FINE_CARD = (5, 200)
+
+
+def _card_fit(n_unique: int, role_key: str) -> float:
+    lo, hi = _COARSE_CARD if role_key == "cell_type_coarse" else _FINE_CARD
+    return 1.0 if lo <= n_unique <= hi else 0.3
+
+
+def _rank_celltype(digest: ObsDigest, role) -> list:
+    out = []
+    for c in digest.columns:
+        if c.single_value or c.unique_per_cell:
+            continue
+        if c.dtype not in ("categorical", "string"):
+            continue
+        ns = name_signal(c.name, role)          # role-specific (coarse/fine) aliases
+        base = celltype_name_base(c.name)       # generic "celltype"/"annotation" name
+        vocab = celltype_value_frac(c)
+        name_score = max(ns, 0.6 * base)
+        if name_score <= 0 and vocab < 0.5:     # must look like a cell-type column
+            continue
+        card = _card_fit(c.n_unique, role.key)
+        score = max(0.0, min(1.0, 0.4 * name_score + 0.4 * vocab + 0.2 * card))
+        if score <= 0:
+            continue
+        out.append(Candidate(
+            role=role.key, column=c.name, kind="single", score=score,
+            source="heuristic",
+            reason=(f"name={name_score:.1f}, celltype_vocab={vocab:.2f}, "
+                    f"n_unique={c.n_unique}")))
+    out.sort(key=lambda c: c.score, reverse=True)
+    return out
+```
+
+Extend the `rank_heuristic` dispatch to route the new type:
+
+```python
+def rank_heuristic(digest: ObsDigest, roles) -> dict:
+    out = {}
+    for key in roles:
+        role = ROLES[key]
+        if role.type == "grouping":
+            out[key] = _rank_sample(digest)
+        elif role.type == "numeric":
+            out[key] = _rank_numeric(digest, role)
+        else:                                    # "celltype"
+            out[key] = _rank_celltype(digest, role)
+    return out
+```
+
+- [ ] **Step 8: Run heuristic tests to verify pass**
+
+Run: `/scratch/users/chensj16/venvs/dl2025/.venv/bin/python -m pytest tests/test_heuristic.py -q`
+Expected: PASS.
+
+- [ ] **Step 9: Add LLM prompt descriptions for the celltype roles (`prompts.py`)**
+
+Add entries to `_ROLE_DESCRIPTIONS`:
+
+```python
+    "cell_type_coarse": ("coarse/broad cell-type or lineage label per cell "
+                         "(e.g. Epithelial, Endothelial, Immune, Stromal); FEWER categories"),
+    "cell_type_fine": ("fine-grained cell-type / subtype label per cell "
+                       "(e.g. CD8+ T cell, Capillary endothelial); MORE categories"),
+```
+
+Append one sentence to `SYSTEM_PROMPT` (after the existing distinguish-look-alikes guidance, before the "Return JSON only" paragraph) so the model assigns coarse vs fine by value granularity and cardinality:
+
+```python
+    "For the two cell-type roles, judge by the column's values and cardinality: "
+    "broad lineage names with few categories are cell_type_coarse; specific "
+    "subtype names with many categories are cell_type_fine. A dataset may have "
+    "both, one, or neither.\n\n"
+```
+
+- [ ] **Step 10: Add a CLI roles-coverage assertion (`tests/test_cli.py`)**
+
+Add:
+
+```python
+def test_cli_default_roles_include_celltype(tmp_path, capsys):
+    p = tmp_path / "ct.h5ad"
+    n = 30
+    obs = pd.DataFrame({"sample": ["S1"] * 15 + ["S2"] * 15,
+                        "cell_type": (["Epithelial"] * 10 + ["Immune"] * 10
+                                      + ["Stromal"] * 10)})
+    _write(p, obs, [f"c{i}" for i in range(n)])
+    code = main([str(p), "--no-llm"])
+    assert code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "cell_type_coarse" in out["roles"] and "cell_type_fine" in out["roles"]
+    assert out["roles"]["cell_type_coarse"][0]["column"] == "cell_type"
+```
+
+- [ ] **Step 11: Run the full suite**
+
+Run: `/scratch/users/chensj16/venvs/dl2025/.venv/bin/python -m pytest -q`
+Expected: PASS (60 + 8 new = 68).
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add src/stanmetacols/roles.py src/stanmetacols/heuristic.py src/stanmetacols/prompts.py tests/
+git commit -m "feat: cell_type_coarse + cell_type_fine roles (name + value-vocabulary + cardinality; LLM resolves coarse/fine)"
+```
+
+---
+
+## Task 9: Documentation rewrite (README + formulation)
 
 **Files:**
 - Modify: `README.md`
