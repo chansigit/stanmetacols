@@ -27,6 +27,9 @@ def main(argv=None) -> int:
     parser.add_argument("--model", default="claude-opus-4-8")
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--api-key-env", default=None)
+    parser.add_argument("--hint", default="",
+                        help="optional free-text guidance for the LLM to locate "
+                             "columns (LLM path only; ignored with --no-llm)")
     args = parser.parse_args(argv)
 
     roles = None
@@ -48,8 +51,9 @@ def main(argv=None) -> int:
         return 1
 
     result = rank_meta_columns(
-        adata, roles=roles, use_llm=not args.no_llm, provider=args.provider,
-        model=args.model, base_url=args.base_url, api_key=api_key, top_k=args.top)
+        adata, roles=roles, use_llm=not args.no_llm, hint=args.hint,
+        provider=args.provider, model=args.model, base_url=args.base_url,
+        api_key=api_key, top_k=args.top)
 
     print(json.dumps(
         {"method": result.method,

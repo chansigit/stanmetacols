@@ -41,7 +41,8 @@ def _extract(data):
 
 
 def rank_meta_columns(data, *, roles=None, use_llm: bool = True,
-                      adjudicate: bool = True, provider: str = "anthropic",
+                      adjudicate: bool = True, hint: str = "",
+                      provider: str = "anthropic",
                       model: str = "claude-opus-4-8", client=None,
                       base_url: str | None = None, api_key: str | None = None,
                       top_k: int | None = 5) -> MetaColsResult:
@@ -51,7 +52,7 @@ def rank_meta_columns(data, *, roles=None, use_llm: bool = True,
 
     if use_llm:
         try:
-            ranked = rank_with_llm(digest, role_keys, provider=provider,
+            ranked = rank_with_llm(digest, role_keys, hint=hint, provider=provider,
                                    model=model, client=client,
                                    base_url=base_url, api_key=api_key)
             method = f"llm ({provider})"
@@ -60,7 +61,7 @@ def rank_meta_columns(data, *, roles=None, use_llm: bool = True,
                 if amb:
                     try:
                         verdicts = adjudicate_numeric(
-                            digest, amb, provider=provider, model=model,
+                            digest, amb, hint=hint, provider=provider, model=model,
                             client=client, base_url=base_url, api_key=api_key)
                         if verdicts:
                             _apply_verdicts(ranked, verdicts)

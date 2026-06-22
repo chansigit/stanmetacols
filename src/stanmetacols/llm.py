@@ -67,7 +67,7 @@ def _parse_ranked(text: str | None) -> RankedCandidates:
         raise LLMUnavailable(f"response does not match schema: {exc}") from exc
 
 
-def _call_anthropic(digest: ObsDigest, roles, model: str, client, max_tokens: int) -> RankedCandidates:
+def _call_anthropic(digest: ObsDigest, roles, hint: str, model: str, client, max_tokens: int) -> RankedCandidates:
     if client is None:
         try:
             import anthropic
@@ -83,7 +83,7 @@ def _call_anthropic(digest: ObsDigest, roles, model: str, client, max_tokens: in
             model=model,
             max_tokens=max_tokens,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": build_user_prompt(digest, roles)}],
+            messages=[{"role": "user", "content": build_user_prompt(digest, roles, hint)}],
             output_format=RankedCandidates,
         )
     except Exception as exc:  # any API/connection/parse error -> fallback
@@ -95,7 +95,7 @@ def _call_anthropic(digest: ObsDigest, roles, model: str, client, max_tokens: in
     return parsed
 
 
-def _call_openai(digest: ObsDigest, roles, model: str, client, base_url, api_key,
+def _call_openai(digest: ObsDigest, roles, hint: str, model: str, client, base_url, api_key,
                  max_tokens: int) -> RankedCandidates:
     if client is None:
         try:
@@ -119,7 +119,7 @@ def _call_openai(digest: ObsDigest, roles, model: str, client, base_url, api_key
             max_tokens=max_tokens,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": build_user_prompt(digest, roles)},
+                {"role": "user", "content": build_user_prompt(digest, roles, hint)},
             ],
         )
     except Exception as exc:  # any API/connection error -> fallback
@@ -195,11 +195,12 @@ def _call_openai_adjudication(prompt, model, client, base_url, api_key, max_toke
         raise LLMUnavailable(f"adjudication does not match schema: {exc}") from exc
 
 
-def adjudicate_numeric(digest, contention, *, provider: str = "anthropic",
+def adjudicate_numeric(digest, contention, *, hint: str = "",
+                       provider: str = "anthropic",
                        model: str = "claude-opus-4-8", client=None,
                        base_url: str | None = None, api_key: str | None = None,
                        max_tokens: int = 1024) -> dict:
-    prompt = build_adjudication_prompt(digest, contention)
+    prompt = build_adjudication_prompt(digest, contention, hint)
     if provider == "anthropic":
         parsed = _call_anthropic_adjudication(prompt, model, client, max_tokens)
     elif provider == "openai":
@@ -214,14 +215,15 @@ def adjudicate_numeric(digest, contention, *, provider: str = "anthropic",
     return verdicts
 
 
-def rank_with_llm(digest: ObsDigest, roles, *, provider: str = "anthropic",
+def rank_with_llm(digest: ObsDigest, roles, *, hint: str = "",
+                  provider: str = "anthropic",
                   model: str = "claude-opus-4-8", client=None,
                   base_url: str | None = None, api_key: str | None = None,
                   max_tokens: int = 2048) -> dict:
     if provider == "anthropic":
-        parsed = _call_anthropic(digest, roles, model, client, max_tokens)
+        parsed = _call_anthropic(digest, roles, hint, model, client, max_tokens)
     elif provider == "openai":
-        parsed = _call_openai(digest, roles, model, client, base_url, api_key, max_tokens)
+        parsed = _call_openai(digest, roles, hint, model, client, base_url, api_key, max_tokens)
     else:
         raise LLMUnavailable(f"unknown provider: {provider!r}")
 

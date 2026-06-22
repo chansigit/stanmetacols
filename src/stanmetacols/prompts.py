@@ -56,16 +56,25 @@ ADJUDICATION_SYSTEM_PROMPT = (
 )
 
 
-def build_user_prompt(digest: ObsDigest, roles) -> str:
+def _hint_block(hint: str) -> str:
+    hint = (hint or "").strip()
+    if not hint:
+        return ""
+    return ("User guidance (authoritative — follow this to locate the columns):\n"
+            + hint + "\n\n")
+
+
+def build_user_prompt(digest: ObsDigest, roles, hint: str = "") -> str:
     return (
-        "Requested roles: " + ", ".join(roles) + "\n\n"
+        _hint_block(hint)
+        + "Requested roles: " + ", ".join(roles) + "\n\n"
         "Here is the .obs digest (JSON):\n\n"
         + json.dumps(digest.to_prompt_dict(), sort_keys=True, indent=2)
         + "\n\nRank the columns that fill each requested role."
     )
 
 
-def build_adjudication_prompt(digest: ObsDigest, contention) -> str:
+def build_adjudication_prompt(digest: ObsDigest, contention, hint: str = "") -> str:
     # contention: dict[role_key -> list[Candidate]]
     by_col = {c.name: c for c in digest.columns}
     blocks = []
@@ -79,5 +88,5 @@ def build_adjudication_prompt(digest: ObsDigest, contention) -> str:
                      f"is_integer_valued={p.is_integer_valued}]")
             lines.append(f"  - {cand.column}{stats}")
         blocks.append("\n".join(lines))
-    return ("Pick the canonical column for each role.\n\n" + "\n\n".join(blocks)
-            + "\n\nReturn one verdict per role.")
+    return (_hint_block(hint) + "Pick the canonical column for each role.\n\n"
+            + "\n\n".join(blocks) + "\n\nReturn one verdict per role.")

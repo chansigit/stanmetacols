@@ -136,3 +136,11 @@ def test_openai_api_error_becomes_llm_unavailable():
 def test_unknown_provider_becomes_llm_unavailable():
     with pytest.raises(LLMUnavailable):
         rank_with_llm(_digest(), ["sample"], provider="cohere")
+
+
+def test_hint_reaches_user_prompt():
+    parsed = RankedCandidates(candidates=[])
+    client = _StubClient(parsed)
+    rank_with_llm(_digest(), ["sample"], hint="HINTTOKEN", client=client)
+    content = client.messages.kwargs["messages"][0]["content"]
+    assert "HINTTOKEN" in content

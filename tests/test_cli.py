@@ -52,3 +52,13 @@ def test_cli_bad_role_exit_1(tmp_path):
 
 def test_cli_bad_path_exit_1():
     assert main(["/no/such/file.h5ad", "--no-llm"]) == 1
+
+
+def test_cli_hint_accepted_offline(tmp_path, capsys):
+    p = tmp_path / "h.h5ad"
+    obs = pd.DataFrame({"sample": ["S1"] * 5 + ["S2"] * 5})
+    _write(p, obs, [f"c{i}" for i in range(10)])
+    code = main([str(p), "--no-llm", "--hint", "ignore me offline"])
+    assert code == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["roles"]["sample"][0]["column"] == "sample"
