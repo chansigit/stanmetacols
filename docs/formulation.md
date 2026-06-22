@@ -194,18 +194,27 @@ The primary path issues **one** structured call
 
 $$\mathcal{R}=\mathrm{LLM}\bigl(\text{system prompt},\ \mathrm{JSON}(\mathcal{D})\bigr),$$
 
-where $\mathcal{R}$ is forced to the schema *list of* $(\texttt{column},
+through one of two interchangeable backends, selected by `provider`:
+
+* **`anthropic`** (default, for Claude) — native `messages.parse` constrains the
+  reply to the Pydantic schema directly.
+* **`openai`** — any OpenAI-compatible `/chat/completions` endpoint (OpenAI,
+  Volcengine ARK, DeepSeek, vLLM, …). The reply *text* is parsed: strip Markdown
+  fences, slice the outermost JSON object/array, then validate against the same
+  Pydantic schema. A bare array is wrapped as `{"candidates": […]}`.
+
+Either way $\mathcal{R}$ is the schema *list of* $(\texttt{column},
 \texttt{kind}, \texttt{score}, \texttt{reason})$. Let $L$ be the set of **valid
 labels** in $\mathcal{D}$ — every column name, every composite label `"a + b"`,
 and the barcode label — together with the map $\ell\mapsto\mathrm{kind}(\ell)$.
-Post-processing is a guard:
+Post-processing is identical for both backends, a guard:
 
 $$\widehat{\mathcal{R}}=\Bigl\{\bigl(\ell,\ \mathrm{kind}(\ell),\ \operatorname{clip}(s),\ r\bigr)\ :\ (\ell,\cdot,s,r)\in\mathcal{R},\ \ell\in L\Bigr\}.$$
 
 That is: a returned label not in $L$ is **dropped** (hallucination guard); the
 score is clipped to $[0,1]$; and `kind` is taken from $\mathcal{D}$, not from the
 model. Results are tagged $\mathrm{source}=\texttt{llm}$ and sorted by score
-descending. Any failure — `anthropic` missing, no API key, network/API error, or
+descending. Any failure — the SDK missing, no API key, network/API error, or
 unparseable output — raises `LLMUnavailable`.
 
 ---
@@ -223,7 +232,7 @@ $$\text{candidates}=
 $$\text{result}=\operatorname{sort}_{\downarrow\,\mathrm{score}}(\text{candidates})\big[:\!k\big]\quad(\text{truncate only if } k>0).$$
 
 The returned `RankResult` carries the candidate list, the `method` string
-(`"llm"`, `"heuristic"`, or `"heuristic (llm unavailable: …)"`), and the digest
+(`"llm (<provider>)"`, `"heuristic"`, or `"heuristic (llm unavailable: …)"`), and the digest
 $\mathcal{D}$. The CLI serializes this to one JSON object on stdout
 (see the README's *Output* section); exit code is $0$ if any candidate survived,
 $2$ if none, $1$ on an IO error.

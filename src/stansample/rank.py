@@ -20,15 +20,18 @@ def _extract(data):
     return data, list(data.index)
 
 
-def rank_sample_columns(data, *, use_llm: bool = True, model: str = "claude-opus-4-8",
-                        client=None, top_k: int | None = 5) -> RankResult:
+def rank_sample_columns(data, *, use_llm: bool = True, provider: str = "anthropic",
+                        model: str = "claude-opus-4-8", client=None,
+                        base_url: str | None = None, api_key: str | None = None,
+                        top_k: int | None = 5) -> RankResult:
     obs, obs_names = _extract(data)
     digest = profile_obs(obs, obs_names)
 
     if use_llm:
         try:
-            candidates = rank_with_llm(digest, model=model, client=client)
-            method = "llm"
+            candidates = rank_with_llm(digest, provider=provider, model=model,
+                                       client=client, base_url=base_url, api_key=api_key)
+            method = f"llm ({provider})"
         except LLMUnavailable as exc:
             candidates = rank_heuristic(digest)
             method = f"heuristic (llm unavailable: {exc})"

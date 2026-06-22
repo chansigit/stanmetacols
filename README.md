@@ -5,9 +5,11 @@ grouping — identifies the **sample** each cell came from (the natural grouping
 unit for per-sample QC, batch grouping, or pseudobulk). It **ranks**; it does
 not decide.
 
-Primary path: a single structured LLM call (`claude-opus-4-8`) over a compact,
-deterministic digest of `.obs`. With no API key or no network, it falls back to
-a deterministic heuristic ranker over the same digest — so it always returns an
+Primary path: a single structured LLM call over a compact, deterministic digest
+of `.obs` — via Claude (`claude-opus-4-8`) by default, or **any
+OpenAI-compatible endpoint** (OpenAI, Volcengine ARK, DeepSeek, vLLM, Ollama, …;
+see [Providers](#providers)). With no API key or no network, it falls back to a
+deterministic heuristic ranker over the same digest — so it always returns an
 answer offline.
 
 The CLI speaks **JSON only** — stdout is always a single JSON object, ready to
@@ -17,11 +19,13 @@ pipe into `jq` or load in another program.
 
 ```bash
 pip install -e .            # core + heuristic only
-pip install -e ".[llm]"     # add the LLM path (anthropic)
+pip install -e ".[llm]"     # add the Anthropic backend (Claude, default)
+pip install -e ".[openai]"  # add the OpenAI-compatible backend (OpenAI, ARK, …)
 pip install -e ".[anndata]" # add .h5ad reading / AnnData inputs
 ```
 
-The LLM path reads `ANTHROPIC_API_KEY` from the environment.
+The Anthropic backend reads `ANTHROPIC_API_KEY`; the OpenAI-compatible backend
+reads `OPENAI_API_KEY` / `OPENAI_BASE_URL` (see [Providers](#providers)).
 
 ## CLI
 
@@ -36,7 +40,46 @@ python -m stansample sample.h5ad    # equivalent module form
 |---|---|---|
 | `--no-llm` | off | force the offline heuristic ranker (no API call) |
 | `--top K` | `5` | keep the K highest-scored candidates; `0` = all |
-| `--model ID` | `claude-opus-4-8` | LLM model id for the primary path |
+| `--provider P` | `anthropic` | LLM backend: `anthropic` or `openai` (see [Providers](#providers)) |
+| `--model ID` | `claude-opus-4-8` | LLM model id; set this when `--provider openai` |
+| `--base-url URL` | `$OPENAI_BASE_URL` | OpenAI-compatible endpoint base URL |
+| `--api-key-env VAR` | SDK default | name of the env var holding the API key |
+
+## Providers
+
+The primary ranker runs through one of two backends, chosen by `--provider`. The
+heuristic fallback is provider-independent.
+
+**`anthropic`** (default) — native `messages.parse` with a strict structured
+output schema. Reads `ANTHROPIC_API_KEY`. Best structured-output guarantee; this
+is the path for Claude.
+
+```bash
+stansample sample.h5ad                          # claude-opus-4-8
+```
+
+**`openai`** — any OpenAI-compatible `/chat/completions` endpoint (OpenAI,
+Volcengine ARK, DeepSeek, vLLM, Ollama, …). The reply is parsed as JSON and
+validated against the same schema, with the same hallucination guard. Reads
+`OPENAI_API_KEY` and `OPENAI_BASE_URL` by default; `--base-url` and
+`--api-key-env` override them.
+
+```bash
+# OpenAI
+export OPENAI_API_KEY=sk-…
+stansample sample.h5ad --provider openai --model gpt-4o-mini
+
+# Volcengine ARK (Doubao) — endpoint id as the model
+export OPENAI_API_KEY=$ARK_API_KEY
+stansample sample.h5ad --provider openai \
+    --base-url https://ark.cn-beijing.volces.com/api/v3 \
+    --model ep-xxxxxxxxxxxx
+
+# …or keep ARK's own key var and let stansample read it:
+stansample sample.h5ad --provider openai \
+    --base-url https://ark.cn-beijing.volces.com/api/v3 \
+    --api-key-env ARK_API_KEY --model ep-xxxxxxxxxxxx
+```
 
 ## Output
 
@@ -47,7 +90,7 @@ found (`candidates` is then `[]`). Diagnostics for unreadable files go to
 
 ```jsonc
 {
-  "method": "heuristic",            // "llm" | "heuristic" | "heuristic (llm unavailable: …)"
+  "method": "heuristic",            // "llm (anthropic)" | "llm (openai)" | "heuristic" | "heuristic (llm unavailable: …)"
   "candidates": [                   // sorted by score, highest first; length ≤ --top
     {
       "column": "sample",           // .obs column; composite is "a + b"; barcode is "<barcode:prefix:_>"
@@ -62,7 +105,7 @@ found (`candidates` is then `[]`). Diagnostics for unreadable files go to
 
 | Field | Type | Notes |
 |---|---|---|
-| `method` | string | Which path ran end-to-end; the `heuristic (llm unavailable: …)` form names why the LLM was skipped. |
+| `method` | string | Which path ran end-to-end: `llm (<provider>)`, `heuristic`, or `heuristic (llm unavailable: …)` (the last names why the LLM was skipped). |
 | `candidates[]` | array | May be empty. Each element is one ranked entry, in descending `score`. |
 | `candidates[].column` | string | The entry's label: a column name, a `"a + b"` composite, or a `"<barcode:POSITION:DELIM>"` barcode grouping. |
 | `candidates[].kind` | enum | `single`, `composite`, or `barcode`. |
@@ -86,11 +129,16 @@ from stansample import rank_sample_columns
 res = rank_sample_columns(adata)          # or pass a pandas .obs DataFrame
 for c in res.candidates:                  # sorted by score, top 5 by default
     print(c.score, c.kind, c.column, "—", c.reason)
-print(res.method)                         # "llm" or "heuristic (...)"
+print(res.method)                         # "llm (anthropic)" or "heuristic (...)"
 best = res.top()                          # highest-scored; you decide whether to use it
+
+# OpenAI-compatible backend (e.g. Volcengine ARK):
+res = rank_sample_columns(
+    adata, provider="openai", model="ep-xxxx",
+    base_url="https://ark.cn-beijing.volces.com/api/v3", api_key="…")
 ```
 
-`rank_sample_columns(data, *, use_llm=True, model="claude-opus-4-8", client=None, top_k=5)`.
+`rank_sample_columns(data, *, use_llm=True, provider="anthropic", model="claude-opus-4-8", client=None, base_url=None, api_key=None, top_k=5)`.
 Never mutates the input; writes no files.
 
 ## How it works

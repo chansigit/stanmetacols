@@ -1,8 +1,20 @@
-"""Single structured LLM call (claude-opus-4-8) over the digest.
+"""Single structured LLM call over the digest, with a pluggable provider.
 
-anthropic is imported lazily so the package installs and the heuristic path
-runs without it.
+Two backends, selected by ``provider``:
+
+* ``"anthropic"`` (default) — native ``client.messages.parse`` with a Pydantic
+  output schema (strongest structured-output guarantee). Used for Claude.
+* ``"openai"`` — any OpenAI-compatible ``/chat/completions`` endpoint (OpenAI,
+  Volcengine ARK, DeepSeek, vLLM, Ollama, …). The reply text is parsed as JSON
+  and validated against the same Pydantic schema.
+
+Both SDKs are imported lazily, so the package installs and the heuristic path
+runs without either one.
 """
+
+from __future__ import annotations
+
+import json
 
 from .schema import ObsDigest, Candidate, RankedCandidates, LLMUnavailable
 from .prompts import SYSTEM_PROMPT, build_user_prompt
@@ -18,8 +30,43 @@ def _valid_labels(digest: ObsDigest) -> dict:
     return labels
 
 
-def rank_with_llm(digest: ObsDigest, *, model: str = "claude-opus-4-8",
-                  client=None, max_tokens: int = 2048) -> list[Candidate]:
+def _extract_json(text: str | None) -> str:
+    """Return the outermost JSON object/array in ``text``.
+
+    Tolerates Markdown code fences and prose around the payload by slicing from
+    the first opening bracket to the matching last closing bracket of the same
+    kind. Robust enough for a model instructed to "return JSON only".
+    """
+    if not text or not text.strip():
+        raise LLMUnavailable("empty model response")
+    t = text.strip()
+    starts = [i for i in (t.find("{"), t.find("[")) if i != -1]
+    if not starts:
+        raise LLMUnavailable("no JSON found in model response")
+    start = min(starts)
+    close = "}" if t[start] == "{" else "]"
+    end = t.rfind(close)
+    if end < start:
+        raise LLMUnavailable("no JSON found in model response")
+    return t[start:end + 1]
+
+
+def _parse_ranked(text: str | None) -> RankedCandidates:
+    """Parse a model's text reply into RankedCandidates (object or bare array)."""
+    blob = _extract_json(text)
+    try:
+        data = json.loads(blob)
+    except Exception as exc:
+        raise LLMUnavailable(f"response is not valid JSON: {exc}") from exc
+    if isinstance(data, list):           # a bare list of candidates
+        data = {"candidates": data}
+    try:
+        return RankedCandidates.model_validate(data)
+    except Exception as exc:
+        raise LLMUnavailable(f"response does not match schema: {exc}") from exc
+
+
+def _call_anthropic(digest: ObsDigest, model: str, client, max_tokens: int) -> RankedCandidates:
     if client is None:
         try:
             import anthropic
@@ -38,14 +85,62 @@ def rank_with_llm(digest: ObsDigest, *, model: str = "claude-opus-4-8",
             messages=[{"role": "user", "content": build_user_prompt(digest)}],
             output_format=RankedCandidates,
         )
-    except LLMUnavailable:
-        raise
     except Exception as exc:  # any API/connection/parse error -> fallback
         raise LLMUnavailable(str(exc)) from exc
 
     parsed = getattr(resp, "parsed_output", None)
     if parsed is None:
         raise LLMUnavailable("model returned no parseable structured output")
+    return parsed
+
+
+def _call_openai(digest: ObsDigest, model: str, client, base_url, api_key,
+                 max_tokens: int) -> RankedCandidates:
+    if client is None:
+        try:
+            from openai import OpenAI
+        except Exception as exc:  # not installed
+            raise LLMUnavailable(f"openai not installed: {exc}") from exc
+        kwargs = {}
+        if base_url:
+            kwargs["base_url"] = base_url
+        if api_key:
+            kwargs["api_key"] = api_key
+        try:
+            # OpenAI() also reads OPENAI_API_KEY / OPENAI_BASE_URL from the env.
+            client = OpenAI(**kwargs)
+        except Exception as exc:  # no key, bad config
+            raise LLMUnavailable(f"cannot construct client: {exc}") from exc
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_user_prompt(digest)},
+            ],
+        )
+    except Exception as exc:  # any API/connection error -> fallback
+        raise LLMUnavailable(str(exc)) from exc
+
+    try:
+        text = resp.choices[0].message.content
+    except Exception as exc:
+        raise LLMUnavailable(f"unexpected response shape: {exc}") from exc
+    return _parse_ranked(text)
+
+
+def rank_with_llm(digest: ObsDigest, *, provider: str = "anthropic",
+                  model: str = "claude-opus-4-8", client=None,
+                  base_url: str | None = None, api_key: str | None = None,
+                  max_tokens: int = 2048) -> list[Candidate]:
+    if provider == "anthropic":
+        parsed = _call_anthropic(digest, model, client, max_tokens)
+    elif provider == "openai":
+        parsed = _call_openai(digest, model, client, base_url, api_key, max_tokens)
+    else:
+        raise LLMUnavailable(f"unknown provider: {provider!r}")
 
     labels = _valid_labels(digest)
     out = []
