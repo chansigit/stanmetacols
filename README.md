@@ -13,7 +13,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 **10 roles, 4 types:** `sample` (grouping); `pct_mt`, `pct_hb`,
 `doublet_score`, `n_counts`, `n_genes` (numeric per-cell); `cell_type_coarse`,
-`cell_type_fine` (cell-type labels); `organ`, `tissue` (categorical anatomical
+`cell_type_fine` (cell-type labels); `organ`, `tissue` (anatomical-origin
 metadata). Any role may be absent from the result.
 
 **Two paths, same digest:** a deterministic heuristic (name aliases + per-type
@@ -303,7 +303,7 @@ prompt in **both** stages.
 - **Cell-type** (`cell_type_coarse`, `cell_type_fine`):
   `clip(0.4·name + 0.4·vocab + 0.2·card_fit)` — uses both name signals and a
   vocabulary scan of the actual cell values.
-- **Categorical label** (`organ`, `tissue`): `clip(0.4·name + 0.4·vocab + 0.2·card_fit)` — name aliases plus a per-role value vocabulary (organ names vs sampled-material names); near-disjoint vocabularies keep the two roles from bleeding into each other.
+- **Organ / tissue** (`organ`, `tissue`): `clip(0.4·name + 0.4·vocab + 0.2·card_fit)` — name aliases plus a per-role value vocabulary (organ names vs sampled-material names); near-disjoint vocabularies keep the two roles from bleeding into each other.
 
 ### Stage 3 — Report
 

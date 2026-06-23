@@ -91,6 +91,7 @@ ROLES: dict = {
                  "biopsy_site", "sampling_site"),
         include_tokens=("tissue", "anatomicalsite", "bodysite", "biomaterial",
                         "biosample"),
+        exclude_tokens=(),
         vocab=("blood", "pbmc", "peripheralblood", "wholeblood", "bonemarrow",
                "marrow", "lymphnode", "tumor", "tumour", "biopsy", "csf",
                "cerebrospinal", "bal", "bronchoalveolar", "ascites", "pleural",
