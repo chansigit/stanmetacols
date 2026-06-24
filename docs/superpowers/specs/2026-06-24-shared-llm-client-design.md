@@ -71,23 +71,30 @@ class OpenAICompatClient:
     """Minimal stdlib client for any OpenAI-compatible /chat/completions
     endpoint. No third-party SDK."""
     def __init__(self, base_url: str, api_key: str, model: str, *,
-                 timeout: float = 60.0, temperature: float | None = None): ...
-    def complete(self, system: str, user: str, *,
-                 max_tokens: int | None = None) -> str:
-        # POST {base_url}/chat/completions, Authorization: Bearer {api_key},
-        # body {model, messages:[{system},{user}]}, plus temperature and
-        # max_tokens ONLY when not None. Returns choices[0].message.content.
-        # Any HTTP/URL/shape error -> LLMUnavailable.
+                 timeout: float = 60.0, temperature: float | None = None,
+                 max_tokens: int | None = None): ...
+    def complete(self, system: str, user: str) -> str:
+        # POST to the chat-completions URL derived from base_url:
+        #   url = base_url.rstrip("/"); if not url.endswith("/chat/completions"):
+        #         url += "/chat/completions"
+        #   (so base_url may be the root OR a full chat-completions URL).
+        # Authorization: Bearer {api_key}; body {model, messages:[{system},{user}]}
+        # with plain-string content, plus temperature and max_tokens ONLY when
+        # not None. Returns choices[0].message.content, tolerating str OR
+        # list-of-parts content. Any HTTP/URL/shape error -> LLMUnavailable.
 
 
 def call_structured(client, system: str, user: str,
                     parse: "Callable[[dict|list], T]", *,
-                    list_key: str | None = None,
-                    max_tokens: int | None = None) -> "T":
-    """text = client.complete(system, user, max_tokens=max_tokens);
+                    list_key: str | None = None) -> "T":
+    """text = client.complete(system, user);
     data = json.loads(extract_json(text));
     if isinstance(data, list) and list_key: data = {list_key: data};
-    return parse(data). Any json/parse error -> LLMUnavailable."""
+    return parse(data). Any json/parse error -> LLMUnavailable.
+
+    `client.complete` is called with exactly two positional args (system, user)
+    — the universal protocol standissect's CallableChatClient already uses.
+    Per-call knobs (temperature, max_tokens) live on the client, not here."""
 ```
 
 - `client` is duck-typed: anything with `.complete(system, user, *, max_tokens)`
@@ -118,14 +125,15 @@ imports no stanmetacols module).
   output for the default provider; ~15 lines.)
 - `rank_with_llm`: build prompt + pick `RankedCandidates`; if
   `provider == "anthropic"` → `_anthropic_parse(...)`; if `provider == "openai"` →
-  `call_structured(OpenAICompatClient(base_url, api_key, model), SYSTEM_PROMPT,
-  build_user_prompt(...), RankedCandidates.model_validate, list_key="candidates",
-  max_tokens=2048)`; else `LLMUnavailable("unknown provider")`. Keep the existing
+  `call_structured(OpenAICompatClient(base_url, api_key, model, max_tokens=2048),
+  SYSTEM_PROMPT, build_user_prompt(...), RankedCandidates.model_validate,
+  list_key="candidates")` (when `client is None`; otherwise use the injected
+  `client`); else `LLMUnavailable("unknown provider")`. Keep the existing
   post-processing (role filter + hallucination guard via digest labels →
   `Candidate`).
 - `adjudicate_numeric`: same dispatch with `Adjudications` /
-  `build_adjudication_prompt` / `list_key="verdicts"` / `max_tokens=1024`, then the
-  existing verdict mapping.
+  `build_adjudication_prompt` / `list_key="verdicts"` /
+  `OpenAICompatClient(..., max_tokens=1024)`, then the existing verdict mapping.
 - Delete the four duplicated `_call_anthropic` / `_call_openai` /
   `_call_*_adjudication` functions and the private `_extract_json`/`_parse_ranked`
   (now `llm_client.extract_json`).
@@ -157,10 +165,14 @@ changes.
 
 - **Vendor** the identical `llm_client.py` into standissect (same file).
 - `ArkChatClient` → thin wrapper over `OpenAICompatClient` (or replaced by it).
-  `--ark-endpoint` (full URL) → `base_url` by stripping a trailing
-  `/chat/completions`; `--ark-model` → `model`; `--ark-api-key-env` → read env for
-  `api_key`. The `.complete(system, user) -> str` seam and `CallableChatClient`
-  duck-type are preserved (OpenAICompatClient satisfies the protocol).
+  `--ark-endpoint` (full URL) is passed **directly** as `base_url` (the client
+  appends `/chat/completions` only if absent, so a full URL works as-is);
+  `--ark-model` → `model`; `--ark-api-key-env` → read env for `api_key`;
+  `temperature=0` preserved by constructing the client with `temperature=0`. The
+  `.complete(system, user) -> str` seam and `CallableChatClient` duck-type are
+  preserved (OpenAICompatClient satisfies the two-positional-arg protocol). Wire
+  content as plain strings (ARK accepts string content; this is the
+  cross-endpoint lowest common denominator, replacing ARK's list-of-parts body).
 - `parse_llm_result`: delegate transport + JSON extraction to
   `call_structured(client, system, user, _parse_diagnosis, max_tokens=...)`, where
   `_parse_diagnosis(data: dict) -> DiagnosisResult` keeps the existing
@@ -208,7 +220,11 @@ changes.
   vendored-file model.
 - **standissect uncommitted edits.** Branch from `main`; stage only migration
   files; leave the pre-existing `README.md`/`__init__.py` edits untouched.
-- **Endpoint normalization.** standissect passes a full chat-completions URL today;
-  the shared client wants a base URL. Normalize by stripping the known suffix; if a
-  user passes a non-standard path, document that `base_url` should omit
-  `/chat/completions`.
+- **Endpoint flexibility.** `base_url` accepts either an API root or a full
+  `/chat/completions` URL (the client appends the path only when absent), so
+  standissect's full `--ark-endpoint` and stanmetacols' root base-url both work
+  with no caller-side normalization.
+- **standissect has no test suite today.** The migration must add a small test
+  (inject a `.complete` stub through the existing seam) AND run it via the venv
+  pytest with `PYTHONPATH` set so `standissect` imports as a package — there is no
+  existing safety net to lean on.
